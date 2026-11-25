@@ -78,14 +78,13 @@ To avoid complex, slow SQL joins in individual RLS policies, PostgreSQL helper f
 
 ## 5. Development & Run Instructions
 
-## 5. Development & Run Instructions
-
 ### Flutter setup (DONE)
-1. Dependencies: `flutter pub add supabase_flutter flutter_dotenv flutter_riverpod go_router`
-2. `.env` is listed under `flutter: assets:` in pubspec.yaml and added to `.gitignore`.
+1. Dependencies: `supabase_flutter`, `flutter_dotenv`, `flutter_riverpod`, `go_router`, `google_fonts`.
+2. `.env` is listed under `flutter: assets:` in `pubspec.yaml` and added to `.gitignore`.
 3. `main.dart` order: `WidgetsFlutterBinding.ensureInitialized()` -> `dotenv.load()` -> `Supabase.initialize()` -> `runApp(ProviderScope(child: App()))`.
-4. `app.dart` is a `ConsumerWidget` returning `MaterialApp.router` (Material 3, indigo seed) and watching `routerProvider`.
-5. `core/network/supabase_client.dart` exposes `supabaseProvider` (Riverpod Provider of SupabaseClient). All repositories read the client from this provider, never `Supabase.instance` directly.
+4. `app.dart` is a `ConsumerWidget` returning `MaterialApp.router` with `AppTheme.light` / `AppTheme.dark` (`ThemeMode.system`, Inter font, `AppSemanticColors` extension) and watching `routerProvider`.
+5. `core/network/supabase_client.dart` exposes `supabaseProvider` (Riverpod `Provider<SupabaseClient>`). All repositories read the client from this provider, never `Supabase.instance` directly.
+6. `core/theme/` defines the design system (`app_colors.dart`, `app_spacing.dart`, `app_text_styles.dart`, `app_theme.dart`) and `core/widgets/` provides reusable components (`ResponsiveScaffold`, `AppCard`, `StatCard`, `StatusChip`, `AppButton`, `AppTextField`, `SectionHeader`, `EmptyState`, `LoadingView`, `ErrorView`).
 
 ### Folder structure (created)
 lib/
@@ -93,15 +92,16 @@ lib/
   core/config/env.dart
   core/network/supabase_client.dart
   core/router/app_router.dart
+  core/theme/{app_colors,app_spacing,app_text_styles,app_theme}.dart
+  core/widgets/ (shared UI components + ResponsiveScaffold)
   features/auth/{data,presentation,providers}
-  features/home/ (one placeholder home screen per role)
-  features/students/
+  features/home/{data,providers} + 6 role home screens
+  features/students/{data,presentation,providers}
+  features/attendance/{data,presentation,providers}
+  features/fees/{data,presentation,providers}
 
 ### Build order decision
-Flutter is being built BEFORE the SQL migration. Auth uses a stubbed role first
-(hardcoded/dummy profile), then gets swapped to the real `profiles` table once
-the migration is run. Keep the stub behind the auth repository so the swap
-touches one file only.
+Flutter is being built BEFORE the SQL migration. Auth (`StubAuthRepository`) and V1 frontend modules (Students, Attendance, Fees, Home dashboards) use stubbed/dummy data behind Riverpod repositories/providers, then get swapped to real Supabase queries once the migration is run.
 
 ### SQL migration (PENDING)
 Run the consolidated V1 migration in Supabase SQL Editor (tables, enums, helper
@@ -109,14 +109,20 @@ functions, RLS, profile trigger on auth.users, seed data).
 
 ---
 
-## 6. Next Implementation Steps
+## 6. Implementation Status & Next Steps
 
-1. UserRole enum + Profile model (matches `user_role` enum in DB).
-2. AuthRepository (stubbed, then real) + auth provider that exposes the current profile/role.
-3. go_router with redirect guard: logged out -> /login, logged in -> role home.
-4. Login screen + placeholder home screens per role.
-5. Run SQL migration, swap stub for real profiles fetch.
-6. Module 1: Student & Parent Management.
+### Done (Frontend + Stubs)
+1. `UserRole` enum + `Profile` model (matches `user_role` enum in DB).
+2. `AuthRepository` (`StubAuthRepository` + `SupabaseAuthRepository`) & Riverpod providers (`authStateProvider`, `currentProfileProvider`, `loginControllerProvider`).
+3. `go_router` (`routerProvider`) with role-based redirect guard: logged out -> `/login`, logged in -> role home, cross-role routes blocked.
+4. Design system (`core/theme/`), reusable widgets (`core/widgets/`), and `ResponsiveScaffold` (bottom `NavigationBar` < 900px, `NavigationRail` >= 900px).
+5. `LoginScreen` (with 6 quick-login role buttons in stub mode) + 6 role home dashboards.
+6. Stubbed V1 frontend modules: Students (search, class filter, detail sheet, add student), Attendance (section roll-call), and Fees (dues list + fee collection sheet).
+
+### Next
+1. Run V1 SQL migration in Supabase SQL Editor.
+2. Swap `StubAuthRepository` -> `SupabaseAuthRepository` in `features/auth/providers/auth_providers.dart`.
+3. Wire Students, Attendance, Fees, and Notices repositories to Supabase.
 
 ## 7. Conventions
 - State management: Riverpod. Navigation: go_router. No setState for app-level state.
