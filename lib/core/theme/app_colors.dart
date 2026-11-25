@@ -5,48 +5,53 @@ import 'package:flutter/material.dart';
 /// To change the brand primary color across the entire app, update [primary].
 abstract final class AppColors {
   // Brand colors — change [primary] here to re-theme the whole app.
-  static const Color primary = Color(0xFF2457A6);
-  static const Color secondary = Color(0xFF2E7D87);
+  static const Color primary = Color(0xFF2563EB);
+  static const Color secondary = Color(0xFF7C3AED);
 
-  // Light surfaces & neutrals (warm off-white canvas, pure white cards)
-  static const Color lightBackground = Color(0xFFF7F8FA);
+  // Light surfaces & neutrals (cool off-white canvas, pure white cards)
+  static const Color lightBackground = Color(0xFFF4F7FC);
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightSurfaceVariant = Color(0xFFEEF1F6);
-  static const Color lightBorder = Color(0xFFE2E6EE);
-  static const Color lightTextPrimary = Color(0xFF1A2130);
-  static const Color lightTextSecondary = Color(0xFF5A657A);
+  static const Color lightSurfaceVariant = Color(0xFFEEF3FA);
+  static const Color lightBorder = Color(0xFFE5ECF6);
+  static const Color lightTextPrimary = Color(0xFF0F172A);
+  static const Color lightTextSecondary = Color(0xFF64748B);
 
   // Dark surfaces & neutrals
-  static const Color darkBackground = Color(0xFF11151E);
-  static const Color darkSurface = Color(0xFF19202C);
-  static const Color darkSurfaceVariant = Color(0xFF232C3D);
-  static const Color darkBorder = Color(0xFF2E384D);
-  static const Color darkTextPrimary = Color(0xFFF1F4F9);
-  static const Color darkTextSecondary = Color(0xFFA6B1C4);
+  static const Color darkBackground = Color(0xFF0F172A);
+  static const Color darkSurface = Color(0xFF1E293B);
+  static const Color darkSurfaceVariant = Color(0xFF283548);
+  static const Color darkBorder = Color(0xFF334155);
+  static const Color darkTextPrimary = Color(0xFFF8FAFC);
+  static const Color darkTextSecondary = Color(0xFF94A3B8);
 
-  // Semantic status colors (attendance & fee states)
-  static const Color successLight = Color(0xFF1B7F4E);
-  static const Color successContainerLight = Color(0xFFE5F6ED);
-  static const Color successDark = Color(0xFF5AD094);
-  static const Color successContainerDark = Color(0xFF133B27);
+  // Semantic status colors (attendance, fees, and dashboard accents)
+  static const Color successLight = Color(0xFF16A34A);
+  static const Color successContainerLight = Color(0xFFDCFCE7);
+  static const Color successDark = Color(0xFF4ADE80);
+  static const Color successContainerDark = Color(0xFF14532D);
 
-  static const Color warningLight = Color(0xFFB4690E);
-  static const Color warningContainerLight = Color(0xFFFFF4E2);
-  static const Color warningDark = Color(0xFFF5B851);
-  static const Color warningContainerDark = Color(0xFF3E2A0B);
+  static const Color warningLight = Color(0xFFD97706);
+  static const Color warningContainerLight = Color(0xFFFEF3C7);
+  static const Color warningDark = Color(0xFFFBBF24);
+  static const Color warningContainerDark = Color(0xFF451A03);
 
-  static const Color errorLight = Color(0xFFC53939);
-  static const Color errorContainerLight = Color(0xFFFDECEC);
-  static const Color errorDark = Color(0xFFF28B82);
-  static const Color errorContainerDark = Color(0xFF471B1B);
+  static const Color errorLight = Color(0xFFDC2626);
+  static const Color errorContainerLight = Color(0xFFFEE2E2);
+  static const Color errorDark = Color(0xFFF87171);
+  static const Color errorContainerDark = Color(0xFF450A0A);
 
   static const Color infoLight = Color(0xFF2563EB);
-  static const Color infoContainerLight = Color(0xFFEAF1FF);
-  static const Color infoDark = Color(0xFF8AB4F8);
-  static const Color infoContainerDark = Color(0xFF172C4D);
+  static const Color infoContainerLight = Color(0xFFDBEAFE);
+  static const Color infoDark = Color(0xFF60A5FA);
+  static const Color infoContainerDark = Color(0xFF1E3A8A);
+
+  static const Color accentLight = Color(0xFF7C3AED);
+  static const Color accentContainerLight = Color(0xFFEDE9FE);
+  static const Color accentDark = Color(0xFFA78BFA);
+  static const Color accentContainerDark = Color(0xFF2E1065);
 }
 
-/// Theme extension exposing semantic status colors for attendance and fees.
+/// Theme extension exposing semantic status & pastel accent colors.
 @immutable
 class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   const AppSemanticColors({
@@ -58,6 +63,8 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
     required this.errorContainer,
     required this.info,
     required this.infoContainer,
+    required this.accent,
+    required this.accentContainer,
   });
 
   final Color success;
@@ -68,6 +75,8 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   final Color errorContainer;
   final Color info;
   final Color infoContainer;
+  final Color accent;
+  final Color accentContainer;
 
   static const light = AppSemanticColors(
     success: AppColors.successLight,
@@ -78,6 +87,8 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
     errorContainer: AppColors.errorContainerLight,
     info: AppColors.infoLight,
     infoContainer: AppColors.infoContainerLight,
+    accent: AppColors.accentLight,
+    accentContainer: AppColors.accentContainerLight,
   );
 
   static const dark = AppSemanticColors(
@@ -89,6 +100,8 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
     errorContainer: AppColors.errorContainerDark,
     info: AppColors.infoDark,
     infoContainer: AppColors.infoContainerDark,
+    accent: AppColors.accentDark,
+    accentContainer: AppColors.accentContainerDark,
   );
 
   @override
@@ -101,6 +114,8 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
     Color? errorContainer,
     Color? info,
     Color? infoContainer,
+    Color? accent,
+    Color? accentContainer,
   }) {
     return AppSemanticColors(
       success: success ?? this.success,
@@ -111,6 +126,8 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
       errorContainer: errorContainer ?? this.errorContainer,
       info: info ?? this.info,
       infoContainer: infoContainer ?? this.infoContainer,
+      accent: accent ?? this.accent,
+      accentContainer: accentContainer ?? this.accentContainer,
     );
   }
 
@@ -134,6 +151,8 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
       errorContainer: Color.lerp(errorContainer, other.errorContainer, t)!,
       info: Color.lerp(info, other.info, t)!,
       infoContainer: Color.lerp(infoContainer, other.infoContainer, t)!,
+      accent: Color.lerp(accent, other.accent, t)!,
+      accentContainer: Color.lerp(accentContainer, other.accentContainer, t)!,
     );
   }
 }

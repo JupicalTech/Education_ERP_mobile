@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/widgets.dart';
+import '../admissions/presentation/admissions_view.dart';
+import '../admissions/presentation/new_enquiry_screen.dart';
+import '../auth/providers/auth_providers.dart';
 import '../fees/presentation/fees_dues_view.dart';
 import '../students/presentation/students_list_view.dart';
 import 'data/home_dummy_data.dart';
@@ -19,9 +22,14 @@ class PrincipalHome extends ConsumerWidget {
       title: 'Principal Dashboard',
       destinations: const [
         NavDestination(
-          label: 'Overview',
+          label: 'Dashboard',
           icon: Icons.dashboard_outlined,
           selectedIcon: Icons.dashboard_rounded,
+        ),
+        NavDestination(
+          label: 'Admissions',
+          icon: Icons.assignment_ind_outlined,
+          selectedIcon: Icons.assignment_ind_rounded,
         ),
         NavDestination(
           label: 'Students',
@@ -41,6 +49,7 @@ class PrincipalHome extends ConsumerWidget {
       ],
       bodies: [
         _OverviewTab(data: data),
+        const AdmissionsView(),
         const StudentsListView(),
         const FeesDuesView(readOnly: true),
         _NoticesTab(data: data),
@@ -49,24 +58,37 @@ class PrincipalHome extends ConsumerWidget {
   }
 }
 
-class _OverviewTab extends StatelessWidget {
+class _OverviewTab extends ConsumerWidget {
   const _OverviewTab({required this.data});
 
   final PrincipalDashboardData data;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(currentProfileProvider).value;
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
+    final isDesktop =
+        MediaQuery.sizeOf(context).width >= AppSpacing.desktopBreakpoint;
 
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+    final mainContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        WelcomeBanner(
+          greeting: 'Good morning, ${profile?.fullName ?? 'Principal'}!',
+          subtitle:
+              'Attendance is ${data.todayAttendance} today with ${data.pendingDues} in pending fee dues.',
+          actionLabel: 'New Enquiry',
+          actionIcon: Icons.add,
+          onAction: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const NewEnquiryScreen()),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
         LayoutBuilder(
           builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 680;
-            final columns = isWide ? 4 : 2;
-            final spacing = AppSpacing.md;
+            final columns = constraints.maxWidth >= 680 ? 4 : 2;
+            const spacing = AppSpacing.md;
             final cardWidth =
                 (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
@@ -75,24 +97,28 @@ class _OverviewTab extends StatelessWidget {
                 icon: Icons.groups_outlined,
                 value: data.totalStudents,
                 label: 'Total Students',
+                subtitle: 'Across 12 classes',
                 tone: StatTone.primary,
               ),
               StatCard(
                 icon: Icons.fact_check_outlined,
                 value: data.todayAttendance,
                 label: "Today's Attendance",
+                subtitle: 'Marked by 9:30 AM',
                 tone: StatTone.success,
               ),
               StatCard(
                 icon: Icons.payments_outlined,
                 value: data.feesCollected,
                 label: 'Fees Collected',
-                tone: StatTone.info,
+                subtitle: 'This month',
+                tone: StatTone.accent,
               ),
               StatCard(
                 icon: Icons.pending_actions_outlined,
                 value: data.pendingDues,
                 label: 'Pending Dues',
+                subtitle: 'Requires follow-up',
                 tone: StatTone.warning,
               ),
             ];
@@ -159,6 +185,63 @@ class _OverviewTab extends StatelessWidget {
         ),
       ],
     );
+
+    final sidePanel = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionHeader(title: 'Upcoming & Reminders'),
+        const SizedBox(height: AppSpacing.sm),
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: colorScheme.primaryContainer,
+                  child: Icon(Icons.event_outlined, color: colorScheme.primary),
+                ),
+                title: Text('Parent-Teacher Meeting', style: textTheme.titleSmall),
+                subtitle: const Text('Saturday • 09:30 AM – 01:30 PM'),
+              ),
+              const Divider(),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: colorScheme.secondaryContainer,
+                  child: Icon(
+                    Icons.assignment_ind_outlined,
+                    color: colorScheme.secondary,
+                  ),
+                ),
+                title: Text('3 Active Admission Leads', style: textTheme.titleSmall),
+                subtitle: const Text('1 ready for approval'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      children: isDesktop
+          ? [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 7, child: mainContent),
+                  const SizedBox(width: AppSpacing.xl),
+                  Expanded(flex: 3, child: sidePanel),
+                ],
+              ),
+            ]
+          : [
+              mainContent,
+              const SizedBox(height: AppSpacing.xl),
+              sidePanel,
+            ],
+    );
   }
 }
 
@@ -170,7 +253,7 @@ class _NoticesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       itemCount: data.notices.length,
       separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
       itemBuilder: (context, index) {

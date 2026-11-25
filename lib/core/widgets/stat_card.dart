@@ -4,7 +4,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import 'app_card.dart';
 
-enum StatTone { primary, success, warning, error, info }
+enum StatTone { primary, success, warning, error, info, accent }
 
 class StatCard extends StatelessWidget {
   const StatCard({
@@ -12,6 +12,7 @@ class StatCard extends StatelessWidget {
     required this.icon,
     required this.value,
     required this.label,
+    this.subtitle,
     this.tone = StatTone.primary,
     this.onTap,
   });
@@ -19,6 +20,7 @@ class StatCard extends StatelessWidget {
   final IconData icon;
   final String value;
   final String label;
+  final String? subtitle;
   final StatTone tone;
   final VoidCallback? onTap;
 
@@ -34,6 +36,7 @@ class StatCard extends StatelessWidget {
       StatTone.warning => (semantic.warning, semantic.warningContainer),
       StatTone.error => (semantic.error, semantic.errorContainer),
       StatTone.info => (semantic.info, semantic.infoContainer),
+      StatTone.accent => (semantic.accent, semantic.accentContainer),
     };
 
     return AppCard(
@@ -42,30 +45,48 @@ class StatCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-            ),
-            child: Icon(icon, size: 20, color: fg),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+                child: Icon(icon, size: 18, color: fg),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             value,
-            style: textTheme.headlineSmall,
+            style: textTheme.headlineMedium,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            label,
-            style: textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
+          if (subtitle != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              subtitle!,
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          ],
         ],
       ),
     );

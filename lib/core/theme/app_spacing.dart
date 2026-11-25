@@ -13,6 +13,8 @@ abstract final class AppSpacing {
   static const double radiusLg = 16;
 
   static const double wideBreakpoint = 900;
-  static const double maxContentWidth = 1120;
+  static const double desktopBreakpoint = 1160;
+  static const double sidebarWidth = 240;
+  static const double maxContentWidth = 1360;
   static const double maxFormWidth = 420;
 }
