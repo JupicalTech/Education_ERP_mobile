@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/widgets.dart';
+import '../attendance/presentation/mark_attendance_view.dart';
 import 'providers/home_providers.dart';
 
 class TeacherHome extends ConsumerWidget {
@@ -63,9 +64,12 @@ class TeacherHome extends ConsumerWidget {
               icon: Icons.fact_check_outlined,
               fullWidth: true,
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Quick attendance sheet coming soon'),
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => Scaffold(
+                      appBar: AppBar(title: const Text('Mark Attendance')),
+                      body: const MarkAttendanceView(),
+                    ),
                   ),
                 );
               },
@@ -121,11 +125,7 @@ class TeacherHome extends ConsumerWidget {
             ),
           ],
         ),
-        const EmptyState(
-          icon: Icons.fact_check_outlined,
-          title: 'Section Attendance',
-          subtitle: 'Daily attendance register will appear here.',
-        ),
+        const MarkAttendanceView(),
         const EmptyState(
           icon: Icons.assignment_outlined,
           title: 'Homework & Assignments',

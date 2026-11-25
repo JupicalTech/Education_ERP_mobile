@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/widgets.dart';
+import '../fees/presentation/fees_dues_view.dart';
 import 'providers/home_providers.dart';
 
 class FeeClerkHome extends ConsumerWidget {
@@ -84,13 +85,7 @@ class FeeClerkHome extends ConsumerWidget {
               label: 'Collect Fee',
               icon: Icons.add_card_outlined,
               fullWidth: true,
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Fee collection form coming soon'),
-                  ),
-                );
-              },
+              onPressed: () => showCollectFeeSheet(context, ref),
             ),
             const SizedBox(height: AppSpacing.xl),
             const SectionHeader(title: 'Recent Activity'),
@@ -129,11 +124,7 @@ class FeeClerkHome extends ConsumerWidget {
             ),
           ],
         ),
-        const EmptyState(
-          icon: Icons.pending_actions_outlined,
-          title: 'Pending Dues List',
-          subtitle: 'Overdue and partial student invoices will appear here.',
-        ),
+        const FeesDuesView(),
         const EmptyState(
           icon: Icons.receipt_long_outlined,
           title: 'All Receipts',

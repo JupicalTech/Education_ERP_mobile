@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/widgets.dart';
+import '../fees/presentation/fees_dues_view.dart';
+import '../students/presentation/students_list_view.dart';
 import 'data/home_dummy_data.dart';
 import 'providers/home_providers.dart';
 
@@ -39,16 +41,8 @@ class PrincipalHome extends ConsumerWidget {
       ],
       bodies: [
         _OverviewTab(data: data),
-        const EmptyState(
-          icon: Icons.people_outline,
-          title: 'Student Directory',
-          subtitle: 'Module 1 will connect this view to Supabase.',
-        ),
-        const EmptyState(
-          icon: Icons.account_balance_wallet_outlined,
-          title: 'Fee Reports',
-          subtitle: 'Collection summaries and dues will appear here.',
-        ),
+        const StudentsListView(),
+        const FeesDuesView(readOnly: true),
         _NoticesTab(data: data),
       ],
     );
