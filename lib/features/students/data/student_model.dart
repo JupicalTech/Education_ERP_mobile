@@ -1,4 +1,5 @@
 import '../../../core/widgets/status_chip.dart';
+import 'student_admission_model.dart';
 
 class Student {
   const Student({
@@ -13,6 +14,7 @@ class Student {
     required this.guardianPhone,
     required this.attendancePercent,
     required this.feeStatus,
+    this.admissionDetails,
   });
 
   final String id;
@@ -26,6 +28,7 @@ class Student {
   final String guardianPhone;
   final String attendancePercent;
   final StatusType feeStatus;
+  final StudentAdmissionPayload? admissionDetails;
 
   String get fullName => '$firstName $lastName'.trim();
   String get classSection => '$className-$sectionName';
