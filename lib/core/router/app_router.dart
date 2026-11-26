@@ -12,6 +12,9 @@ import '../../features/home/principal_home.dart';
 import '../../features/home/student_home.dart';
 import '../../features/home/super_admin_home.dart';
 import '../../features/home/teacher_home.dart';
+import '../../features/teachers/presentation/teacher_detail_screen.dart';
+import '../../features/teachers/presentation/teacher_form_screen.dart';
+import '../../features/teachers/presentation/teachers_list_view.dart';
 
 class _RouterRefreshNotifier extends ChangeNotifier {
   _RouterRefreshNotifier(Ref ref) {
@@ -60,10 +63,46 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: UserRole.superAdmin.homeRoute,
         builder: (context, state) => const SuperAdminHome(),
+        routes: [
+          GoRoute(
+            path: 'teachers',
+            builder: (context, state) => const TeachersListView(),
+            routes: [
+              GoRoute(
+                path: 'new',
+                builder: (context, state) => const TeacherFormScreen(),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => TeacherDetailScreen(
+                  teacherId: state.pathParameters['id']!,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: UserRole.principal.homeRoute,
         builder: (context, state) => const PrincipalHome(),
+        routes: [
+          GoRoute(
+            path: 'teachers',
+            builder: (context, state) => const TeachersListView(),
+            routes: [
+              GoRoute(
+                path: 'new',
+                builder: (context, state) => const TeacherFormScreen(),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => TeacherDetailScreen(
+                  teacherId: state.pathParameters['id']!,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: UserRole.feeClerk.homeRoute,

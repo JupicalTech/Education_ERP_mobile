@@ -8,6 +8,7 @@ import '../admissions/presentation/new_enquiry_screen.dart';
 import '../auth/providers/auth_providers.dart';
 import '../fees/presentation/fees_dues_view.dart';
 import '../students/presentation/students_list_view.dart';
+import '../teachers/presentation/teachers_list_view.dart';
 import 'data/home_dummy_data.dart';
 import 'providers/home_providers.dart';
 
@@ -37,6 +38,11 @@ class PrincipalHome extends ConsumerWidget {
           selectedIcon: Icons.people_rounded,
         ),
         NavDestination(
+          label: 'Teachers',
+          icon: Icons.badge_outlined,
+          selectedIcon: Icons.badge_rounded,
+        ),
+        NavDestination(
           label: 'Fees',
           icon: Icons.account_balance_wallet_outlined,
           selectedIcon: Icons.account_balance_wallet_rounded,
@@ -51,6 +57,7 @@ class PrincipalHome extends ConsumerWidget {
         _OverviewTab(data: data),
         const AdmissionsView(),
         const StudentsListView(),
+        const TeachersListView(),
         const FeesDuesView(readOnly: true),
         _NoticesTab(data: data),
       ],
