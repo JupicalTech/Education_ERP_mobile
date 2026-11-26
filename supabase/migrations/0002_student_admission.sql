@@ -134,7 +134,7 @@ CREATE POLICY guardians_parent_self ON public.guardians
       profile_id = auth.uid()
       OR id IN (
         SELECT sp.guardian_id FROM public.student_parents sp
-        WHERE sp.student_id = ANY(public.get_my_student_ids())
+        WHERE sp.student_id IN (SELECT public.get_my_student_ids())
       )
     )
   );
@@ -157,7 +157,7 @@ CREATE POLICY prev_schools_parent_student_read ON public.student_previous_school
     institute_id = public.get_my_institute_id()
     AND (
       public.get_my_role() = 'teacher'
-      OR student_id = ANY(public.get_my_student_ids())
+      OR student_id IN (SELECT public.get_my_student_ids())
     )
   );
 
@@ -177,7 +177,7 @@ CREATE POLICY student_docs_parent_student_read ON public.student_documents
   FOR SELECT
   USING (
     institute_id = public.get_my_institute_id()
-    AND student_id = ANY(public.get_my_student_ids())
+    AND student_id IN (SELECT public.get_my_student_ids())
   );
 
 -- Medical info RLS (stricter: excludes fee_clerk from reading medical notes)
@@ -205,7 +205,7 @@ CREATE POLICY medical_info_teacher_parent_read ON public.student_medical_info
     institute_id = public.get_my_institute_id()
     AND (
       public.get_my_role() = 'teacher'
-      OR student_id = ANY(public.get_my_student_ids())
+      OR student_id IN (SELECT public.get_my_student_ids())
     )
   );
 

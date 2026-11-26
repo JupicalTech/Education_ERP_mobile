@@ -47,15 +47,16 @@ This skill documents the foundational design, database schema, Row-Level Securit
 3. **`profiles`**: User identity table extending `auth.users` (`id -> auth.users.id`, `institute_id`, `role`, `first_name`, `last_name`, `phone`, `avatar_url`, `is_active`).
 4. **`classes` & `sections`**: Academic hierarchy (`classes`: `name`, `display_order`; `sections`: `class_id`, `name`, `class_teacher_id`).
 5. **`subjects` & `class_subject_teachers`**: Subject definitions and teacher-to-section allocations.
-6. **`students` & `student_enrollments`**: Student profile records linked with yearly academic class/section enrollments.
-7. **`student_parents`**: Many-to-many relationship linking parents to multiple children (`student_id`, `parent_profile_id`, `relationship`, `is_primary`).
-8. **`student_attendance`**: Daily attendance ledger (`student_id`, `section_id`, `date`, `status`, `marked_by`). Unique constraint on `(student_id, date)`.
-9. **`fee_heads`, `fee_structures`, `student_fees`, `fee_payments`**:
+6. **`students` & `student_enrollments`**: Student profile records (extended with basic, admission, address, emergency contact, transport, and sibling fields) linked with yearly academic class/section enrollments.
+7. **`guardians` & `student_parents`**: Guardian records (`name`, `phone`, `email`, `occupation`, `qualification`, `annual_income`, `relationship`, optional `profile_id`) linked to students via `student_parents` (`is_primary`).
+8. **`student_previous_schools`, `student_documents`, `student_medical_info`**: Previous academic history, document storage references, and isolated medical notes (stricter RLS excluding `fee_clerk` reads).
+9. **`student_attendance`**: Daily attendance ledger (`student_id`, `section_id`, `date`, `status`, `marked_by`). Unique constraint on `(student_id, date)`.
+10. **`fee_heads`, `fee_structures`, `student_fees`, `fee_payments`**:
    * `fee_heads`: Fee categories (Tuition, Lab, Exam).
    * `fee_structures`: Class-level fee templates per academic year.
    * `student_fees`: Student fee invoices/dues (`original_amount`, `discount_amount`, `fine_amount`, `paid_amount`, `status`).
    * `fee_payments`: Receipts and payment ledger with transaction references (`receipt_number`, `amount_paid`, `payment_mode`, `collected_by`).
-10. **`notices`**: School announcements with target audience filters (`target_role`, `target_class_id`).
+11. **`notices`**: School announcements with target audience filters (`target_role`, `target_class_id`).
 
 ---
 
@@ -65,7 +66,7 @@ To avoid complex, slow SQL joins in individual RLS policies, PostgreSQL helper f
 
 * `get_my_institute_id()`: Returns user's `institute_id` from their `profiles` row using `auth.uid()`.
 * `get_my_role()`: Returns user's `user_role` using `auth.uid()`.
-* `get_my_student_ids()`: Returns a list of `student_id`s linked to the logged-in parent via `student_parents`.
+* `get_my_student_ids()`: Set-returning function (`SETOF uuid`) returning `student_id`s linked to the logged-in parent via `student_parents`. Use `student_id IN (SELECT public.get_my_student_ids())` in RLS policies (not `= ANY(...)`).
 
 ### Access Rules
 * **Admins & Principals**: Full read/write access to all records within their `institute_id`.
@@ -104,8 +105,7 @@ lib/
 Flutter is being built BEFORE the SQL migration. Auth (`StubAuthRepository`) and V1 frontend modules (Students, Attendance, Fees, Home dashboards) use stubbed/dummy data behind Riverpod repositories/providers, then get swapped to real Supabase queries once the migration is run.
 
 ### SQL migration (PENDING)
-Run the consolidated V1 migration in Supabase SQL Editor (tables, enums, helper
-functions, RLS, profile trigger on auth.users, seed data).
+Run the consolidated V1 migration and `supabase/migrations/0002_student_admission.sql` (extended `students`, `guardians`, `student_previous_schools`, `student_documents`, `student_medical_info`, RLS, and `create_student_admission(payload jsonb)` RPC) in Supabase SQL Editor.
 
 ---
 
@@ -117,7 +117,7 @@ functions, RLS, profile trigger on auth.users, seed data).
 3. `go_router` (`routerProvider`) with role-based redirect guard: logged out -> `/login`, logged in -> role home, cross-role routes blocked.
 4. Design system (`core/theme/`), reusable widgets (`core/widgets/`), and `ResponsiveScaffold` (bottom `NavigationBar` < 900px, `NavigationRail` >= 900px).
 5. `LoginScreen` (with 6 quick-login role buttons in stub mode) + 6 role home dashboards.
-6. Stubbed V1 frontend modules: Students (search, class filter, detail sheet, add student), Attendance (section roll-call), and Fees (dues list + fee collection sheet).
+6. Stubbed V1 frontend modules: Students (search, class filter, full `StudentDetailScreen` with Edit flow, multi-step `StudentAdmissionScreen` + `StudentAdmissionPayload` + `SupabaseStudentsRepository`), Attendance (section roll-call), and Fees (dues list + fee collection sheet).
 
 ### Next
 1. Run V1 SQL migration in Supabase SQL Editor.
