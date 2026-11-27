@@ -2,18 +2,13 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// import '../../../core/network/supabase_client.dart';
+import '../../../core/network/supabase_client.dart';
 import '../data/teacher_model.dart';
 import '../data/teachers_repository.dart';
 
 final teachersRepositoryProvider = Provider<TeachersRepository>(
-  (ref) => StubTeachersRepository(),
+  (ref) => SupabaseTeachersRepository(ref.watch(supabaseProvider)),
 );
-
-// Ready to swap in when SQL migration is run:
-// final teachersRepositoryProvider = Provider<TeachersRepository>(
-//   (ref) => SupabaseTeachersRepository(ref.watch(supabaseProvider)),
-// );
 
 class TeachersNotifier extends AsyncNotifier<List<Teacher>> {
   @override

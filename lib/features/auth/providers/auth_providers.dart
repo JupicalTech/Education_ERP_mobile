@@ -19,17 +19,9 @@ final stubRoleProvider = NotifierProvider<StubRoleNotifier, UserRole>(
   StubRoleNotifier.new,
 );
 
-/// Active [AuthRepository].
-///
-/// To switch to real Supabase auth + `profiles` fetch after running the V1
-/// SQL migration, replace `StubAuthRepository(...)` with:
-/// `SupabaseAuthRepository(ref.watch(supabaseProvider))`
+/// Active [AuthRepository] backed by Supabase Auth and the `profiles` table.
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  // ignore: unused_local_variable
-  final client = ref.watch(supabaseProvider);
-  final repo = StubAuthRepository(stubRole: ref.watch(stubRoleProvider));
-  ref.onDispose(repo.dispose);
-  return repo;
+  return SupabaseAuthRepository(ref.watch(supabaseProvider));
 });
 
 /// Emits the authenticated user's ID, or `null` when signed out.
