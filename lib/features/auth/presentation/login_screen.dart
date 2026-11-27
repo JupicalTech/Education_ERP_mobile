@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/widgets.dart';
-import '../data/auth_repository.dart';
 import '../data/user_role.dart';
 import '../providers/auth_providers.dart';
 
@@ -62,7 +61,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final loginState = ref.watch(loginControllerProvider);
     final isLoading = loginState.isLoading;
-    final isStubMode = ref.watch(authRepositoryProvider) is StubAuthRepository;
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -202,35 +200,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         isLoading: isLoading,
                         onPressed: _submit,
                       ),
-                      if (isStubMode) ...[
-                        const SizedBox(height: AppSpacing.xl),
-                        const Divider(),
-                        const SizedBox(height: AppSpacing.md),
-                        Text(
-                          'Quick Sign In (Stub Mode)',
-                          textAlign: TextAlign.center,
-                          style: textTheme.labelMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
+                      const SizedBox(height: AppSpacing.xl),
+                      const Divider(),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        'Quick Sign In',
+                        textAlign: TextAlign.center,
+                        style: textTheme.labelMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                         ),
-                        const SizedBox(height: AppSpacing.md),
-                        Wrap(
-                          spacing: AppSpacing.sm,
-                          runSpacing: AppSpacing.sm,
-                          alignment: WrapAlignment.center,
-                          children: UserRole.values
-                              .map(
-                                (role) => OutlinedButton.icon(
-                                  onPressed: isLoading
-                                      ? null
-                                      : () => _signInAsRole(role),
-                                  icon: Icon(_roleIcon(role), size: 18),
-                                  label: Text(role.label),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ],
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        alignment: WrapAlignment.center,
+                        children: UserRole.values
+                            .where((role) => role != UserRole.superAdmin)
+                            .map(
+                              (role) => OutlinedButton.icon(
+                                onPressed: isLoading
+                                    ? null
+                                    : () => _signInAsRole(role),
+                                icon: Icon(_roleIcon(role), size: 18),
+                                label: Text(role.label),
+                              ),
+                            )
+                            .toList(),
+                      ),
                     ],
                   ),
                 ),
