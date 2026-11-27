@@ -1,80 +1,101 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/attendance_model.dart';
+import '../data/attendance_repository.dart';
 
-class AttendanceSectionNotifier extends Notifier<String> {
-  @override
-  String build() => 'Class 8-A';
-
-  void select(String section) => state = section;
-}
-
-final attendanceSectionProvider =
-    NotifierProvider<AttendanceSectionNotifier, String>(
-  AttendanceSectionNotifier.new,
+final attendanceRepositoryProvider = Provider<AttendanceRepository>(
+  (ref) => StubAttendanceRepository(),
 );
 
-class AttendanceRosterNotifier extends Notifier<List<AttendanceRosterEntry>> {
+final attendanceSectionsProvider = FutureProvider<List<AttendanceSection>>((
+  ref,
+) {
+  return ref.watch(attendanceRepositoryProvider).fetchSections();
+});
+
+class _SelectedSectionNotifier extends Notifier<AttendanceSection?> {
   @override
-  List<AttendanceRosterEntry> build() {
-    final section = ref.watch(attendanceSectionProvider);
-    return _dummyRosterFor(section);
+  AttendanceSection? build() => null;
+
+  void select(AttendanceSection? section) => state = section;
+}
+
+final selectedAttendanceSectionProvider =
+    NotifierProvider<_SelectedSectionNotifier, AttendanceSection?>(
+      _SelectedSectionNotifier.new,
+    );
+
+final activeAttendanceSectionProvider = Provider<AttendanceSection?>((ref) {
+  final selected = ref.watch(selectedAttendanceSectionProvider);
+  final sections = ref.watch(attendanceSectionsProvider).value ?? const [];
+  if (selected != null && sections.contains(selected)) return selected;
+  return sections.isNotEmpty ? sections.first : null;
+});
+
+class _AttendanceDateNotifier extends Notifier<DateTime> {
+  @override
+  DateTime build() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  void setDate(DateTime date) =>
+      state = DateTime(date.year, date.month, date.day);
+}
+
+final attendanceDateProvider =
+    NotifierProvider<_AttendanceDateNotifier, DateTime>(
+      _AttendanceDateNotifier.new,
+    );
+
+class AttendanceRosterNotifier
+    extends AsyncNotifier<List<AttendanceRosterEntry>> {
+  @override
+  FutureOr<List<AttendanceRosterEntry>> build() async {
+    final section = ref.watch(activeAttendanceSectionProvider);
+    final date = ref.watch(attendanceDateProvider);
+    if (section == null) return const [];
+    return ref
+        .read(attendanceRepositoryProvider)
+        .fetchRoster(sectionId: section.id, date: date);
   }
 
   void setStatus(String studentId, AttendanceStatus status) {
-    state = [
-      for (final entry in state)
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData([
+      for (final entry in current)
         if (entry.studentId == studentId)
           entry.copyWith(status: status)
         else
           entry,
-    ];
+    ]);
   }
 
   void markAllPresent() {
-    state = [
-      for (final entry in state)
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData([
+      for (final entry in current)
         entry.copyWith(status: AttendanceStatus.present),
-    ];
+    ]);
   }
 
-  static List<AttendanceRosterEntry> _dummyRosterFor(String section) {
-    return [
-      AttendanceRosterEntry(
-        studentId: '$section-1',
-        rollNo: 1,
-        studentName: 'Aarav Sharma',
-        status: AttendanceStatus.present,
-      ),
-      AttendanceRosterEntry(
-        studentId: '$section-2',
-        rollNo: 2,
-        studentName: 'Diya Kulkarni',
-        status: AttendanceStatus.present,
-      ),
-      AttendanceRosterEntry(
-        studentId: '$section-3',
-        rollNo: 3,
-        studentName: 'Kabir Patel',
-        status: AttendanceStatus.absent,
-      ),
-      AttendanceRosterEntry(
-        studentId: '$section-4',
-        rollNo: 4,
-        studentName: 'Meera Nair',
-        status: AttendanceStatus.late,
-      ),
-      AttendanceRosterEntry(
-        studentId: '$section-5',
-        rollNo: 5,
-        studentName: 'Rohan Verma',
-        status: AttendanceStatus.present,
-      ),
-    ];
+  Future<void> submit() async {
+    final section = ref.read(activeAttendanceSectionProvider);
+    final date = ref.read(attendanceDateProvider);
+    final entries = state.value ?? const [];
+    if (section == null || entries.isEmpty) return;
+
+    await ref
+        .read(attendanceRepositoryProvider)
+        .saveAttendance(sectionId: section.id, date: date, entries: entries);
   }
 }
 
 final attendanceRosterProvider =
-    NotifierProvider<AttendanceRosterNotifier, List<AttendanceRosterEntry>>(
-  AttendanceRosterNotifier.new,
-);
+    AsyncNotifierProvider<AttendanceRosterNotifier, List<AttendanceRosterEntry>>(
+      AttendanceRosterNotifier.new,
+    );

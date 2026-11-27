@@ -1,5 +1,5 @@
--- Teachers & Staff Management Schema, RLS Policies, and Transactional RPCs
--- Depends on V1 tables & RLS helpers: get_my_institute_id(), get_my_role()
+-- Teachers & Staff Management Schema, RLS Policies, and Transactional RPCs (Single-Institute)
+-- Depends on V1 tables & RLS helper: get_my_role()
 
 -- 1. Custom Enums
 DO $$ BEGIN
@@ -19,9 +19,8 @@ END $$;
 -- 2. Teachers table (1:1 with profiles where role = 'teacher')
 CREATE TABLE IF NOT EXISTS public.teachers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  institute_id UUID NOT NULL REFERENCES public.institutes(id) ON DELETE CASCADE,
   profile_id UUID NOT NULL UNIQUE REFERENCES public.profiles(id) ON DELETE CASCADE,
-  employee_id TEXT NOT NULL,
+  employee_id TEXT NOT NULL UNIQUE,
   middle_name TEXT,
   date_of_birth DATE,
   gender TEXT,
@@ -51,18 +50,15 @@ CREATE TABLE IF NOT EXISTS public.teachers (
   resignation_date DATE,
   teaching_license_number TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (institute_id, employee_id)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_teachers_institute ON public.teachers(institute_id);
 CREATE INDEX IF NOT EXISTS idx_teachers_profile ON public.teachers(profile_id);
-CREATE INDEX IF NOT EXISTS idx_teachers_status ON public.teachers(institute_id, status);
+CREATE INDEX IF NOT EXISTS idx_teachers_status ON public.teachers(status);
 
 -- 3. Teacher Qualifications
 CREATE TABLE IF NOT EXISTS public.teacher_qualifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  institute_id UUID NOT NULL REFERENCES public.institutes(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES public.teachers(id) ON DELETE CASCADE,
   degree TEXT NOT NULL,
   specialization TEXT,
@@ -77,7 +73,6 @@ CREATE INDEX IF NOT EXISTS idx_teacher_quals_teacher ON public.teacher_qualifica
 -- 4. Teacher Previous Experience
 CREATE TABLE IF NOT EXISTS public.teacher_experience (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  institute_id UUID NOT NULL REFERENCES public.institutes(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES public.teachers(id) ON DELETE CASCADE,
   organization TEXT NOT NULL,
   designation TEXT,
@@ -92,7 +87,6 @@ CREATE INDEX IF NOT EXISTS idx_teacher_exp_teacher ON public.teacher_experience(
 -- 5. Teacher Documents (Supabase Storage references)
 CREATE TABLE IF NOT EXISTS public.teacher_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  institute_id UUID NOT NULL REFERENCES public.institutes(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES public.teachers(id) ON DELETE CASCADE,
   doc_type TEXT NOT NULL,
   file_name TEXT,
@@ -105,7 +99,6 @@ CREATE INDEX IF NOT EXISTS idx_teacher_docs_teacher ON public.teacher_documents(
 -- 6. Teacher Teachable Subjects (capability, separate from class_subject_teachers)
 CREATE TABLE IF NOT EXISTS public.teacher_subjects (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  institute_id UUID NOT NULL REFERENCES public.institutes(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES public.teachers(id) ON DELETE CASCADE,
   subject_id UUID NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -117,7 +110,6 @@ CREATE INDEX IF NOT EXISTS idx_teacher_subjects_teacher ON public.teacher_subjec
 -- 7. Teacher Salary & Bank Details (isolated for strict principal/super_admin RLS)
 CREATE TABLE IF NOT EXISTS public.teacher_bank_details (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  institute_id UUID NOT NULL REFERENCES public.institutes(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL UNIQUE REFERENCES public.teachers(id) ON DELETE CASCADE,
   basic_salary NUMERIC(12, 2) NOT NULL DEFAULT 0,
   allowances NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -143,31 +135,21 @@ ALTER TABLE public.teacher_subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teacher_bank_details ENABLE ROW LEVEL SECURITY;
 
 -- 9. RLS Policies
--- Principal & Super Admin: full access within institute
+-- Principal & Super Admin: full access
 CREATE POLICY "teachers_admin_all" ON public.teachers
   FOR ALL
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  )
-  WITH CHECK (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  );
+  USING (public.get_my_role() IN ('super_admin', 'principal'))
+  WITH CHECK (public.get_my_role() IN ('super_admin', 'principal'));
 
--- Teachers: read own full teacher record (no direct edits to employment/salary)
+-- Teachers: read own full teacher record
 CREATE POLICY "teachers_self_select" ON public.teachers
   FOR SELECT
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND profile_id = auth.uid()
-  );
+  USING (profile_id = auth.uid());
 
--- Safe basic directory view for other roles (name, photo, designation, subjects)
+-- Safe basic directory view for other roles (name, photo, designation)
 CREATE OR REPLACE VIEW public.teacher_directory AS
 SELECT
   t.id,
-  t.institute_id,
   t.profile_id,
   p.first_name,
   p.last_name,
@@ -176,91 +158,51 @@ SELECT
   t.status,
   p.is_active
 FROM public.teachers t
-JOIN public.profiles p ON p.id = t.profile_id
-WHERE t.institute_id = public.get_my_institute_id();
+JOIN public.profiles p ON p.id = t.profile_id;
 
 -- Qualifications, Experience, Documents, Teachable Subjects:
 -- Admin full CRUD; Teacher read own
 CREATE POLICY "teacher_quals_admin_all" ON public.teacher_qualifications
   FOR ALL
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  )
-  WITH CHECK (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  );
+  USING (public.get_my_role() IN ('super_admin', 'principal'))
+  WITH CHECK (public.get_my_role() IN ('super_admin', 'principal'));
 
 CREATE POLICY "teacher_quals_self_select" ON public.teacher_qualifications
   FOR SELECT
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND teacher_id IN (SELECT id FROM public.teachers WHERE profile_id = auth.uid())
-  );
+  USING (teacher_id IN (SELECT id FROM public.teachers WHERE profile_id = auth.uid()));
 
 CREATE POLICY "teacher_exp_admin_all" ON public.teacher_experience
   FOR ALL
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  )
-  WITH CHECK (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  );
+  USING (public.get_my_role() IN ('super_admin', 'principal'))
+  WITH CHECK (public.get_my_role() IN ('super_admin', 'principal'));
 
 CREATE POLICY "teacher_exp_self_select" ON public.teacher_experience
   FOR SELECT
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND teacher_id IN (SELECT id FROM public.teachers WHERE profile_id = auth.uid())
-  );
+  USING (teacher_id IN (SELECT id FROM public.teachers WHERE profile_id = auth.uid()));
 
 CREATE POLICY "teacher_docs_admin_all" ON public.teacher_documents
   FOR ALL
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  )
-  WITH CHECK (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  );
+  USING (public.get_my_role() IN ('super_admin', 'principal'))
+  WITH CHECK (public.get_my_role() IN ('super_admin', 'principal'));
 
 CREATE POLICY "teacher_docs_self_select" ON public.teacher_documents
   FOR SELECT
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND teacher_id IN (SELECT id FROM public.teachers WHERE profile_id = auth.uid())
-  );
+  USING (teacher_id IN (SELECT id FROM public.teachers WHERE profile_id = auth.uid()));
 
 CREATE POLICY "teacher_subjects_admin_all" ON public.teacher_subjects
   FOR ALL
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  )
-  WITH CHECK (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  );
+  USING (public.get_my_role() IN ('super_admin', 'principal'))
+  WITH CHECK (public.get_my_role() IN ('super_admin', 'principal'));
 
-CREATE POLICY "teacher_subjects_institute_select" ON public.teacher_subjects
+CREATE POLICY "teacher_subjects_auth_select" ON public.teacher_subjects
   FOR SELECT
-  USING (institute_id = public.get_my_institute_id());
+  USING (auth.uid() IS NOT NULL);
 
 -- Salary & Bank Details: STRICTLY principal & super_admin only
 CREATE POLICY "teacher_bank_admin_only" ON public.teacher_bank_details
   FOR ALL
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  )
-  WITH CHECK (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  );
+  USING (public.get_my_role() IN ('super_admin', 'principal'))
+  WITH CHECK (public.get_my_role() IN ('super_admin', 'principal'));
 
 -- 10. Transactional RPC: create_teacher(payload jsonb)
 CREATE OR REPLACE FUNCTION public.create_teacher(payload JSONB)
@@ -270,7 +212,6 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_institute_id UUID := public.get_my_institute_id();
   v_role public.user_role := public.get_my_role();
   v_profile_id UUID;
   v_teacher_id UUID;
@@ -285,18 +226,15 @@ BEGIN
 
   v_profile_id := COALESCE((payload->>'profile_id')::UUID, gen_random_uuid());
 
-  -- Generate institute-scoped employee ID: EMP-YYYY-NNN
-  SELECT COUNT(*) + 1 INTO v_seq
-  FROM public.teachers
-  WHERE institute_id = v_institute_id;
+  -- Generate employee ID: EMP-YYYY-NNN
+  SELECT COUNT(*) + 1 INTO v_seq FROM public.teachers;
   v_employee_id := 'EMP-' || TO_CHAR(CURRENT_DATE, 'YYYY') || '-' || LPAD(v_seq::TEXT, 3, '0');
 
   -- Upsert profile
   INSERT INTO public.profiles (
-    id, institute_id, role, first_name, last_name, phone, avatar_url, is_active
+    id, role, first_name, last_name, phone, avatar_url, is_active
   ) VALUES (
     v_profile_id,
-    v_institute_id,
     'teacher',
     payload->>'first_name',
     payload->>'last_name',
@@ -313,14 +251,13 @@ BEGIN
 
   -- Insert teacher row
   INSERT INTO public.teachers (
-    institute_id, profile_id, employee_id, middle_name, date_of_birth, gender,
+    profile_id, employee_id, middle_name, date_of_birth, gender,
     blood_group, marital_status, nationality, religion, aadhaar_number, pan_number,
     alternate_phone, email, current_address, permanent_address, city, state, pincode,
     emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
     designation, department, employment_type, joining_date, probation_end_date,
     reporting_to, status, resignation_date, teaching_license_number
   ) VALUES (
-    v_institute_id,
     v_profile_id,
     v_employee_id,
     NULLIF(payload->>'middle_name', ''),
@@ -358,9 +295,9 @@ BEGIN
   FOR v_item IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'qualifications', '[]'::JSONB))
   LOOP
     INSERT INTO public.teacher_qualifications (
-      institute_id, teacher_id, degree, specialization, institution, year_of_passing, percentage_or_grade
+      teacher_id, degree, specialization, institution, year_of_passing, percentage_or_grade
     ) VALUES (
-      v_institute_id, v_teacher_id,
+      v_teacher_id,
       v_item->>'degree',
       NULLIF(v_item->>'specialization', ''),
       v_item->>'institution',
@@ -373,9 +310,9 @@ BEGIN
   FOR v_item IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'experiences', '[]'::JSONB))
   LOOP
     INSERT INTO public.teacher_experience (
-      institute_id, teacher_id, organization, designation, from_date, to_date, reason_for_leaving
+      teacher_id, organization, designation, from_date, to_date, reason_for_leaving
     ) VALUES (
-      v_institute_id, v_teacher_id,
+      v_teacher_id,
       v_item->>'organization',
       NULLIF(v_item->>'designation', ''),
       (v_item->>'from_date')::DATE,
@@ -387,8 +324,8 @@ BEGIN
   -- Teachable Subjects
   FOR v_item IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'teachable_subject_ids', '[]'::JSONB))
   LOOP
-    INSERT INTO public.teacher_subjects (institute_id, teacher_id, subject_id)
-    VALUES (v_institute_id, v_teacher_id, (v_item#>>'{}')::UUID)
+    INSERT INTO public.teacher_subjects (teacher_id, subject_id)
+    VALUES (v_teacher_id, (v_item#>>'{}')::UUID)
     ON CONFLICT DO NOTHING;
   END LOOP;
 
@@ -396,9 +333,8 @@ BEGIN
   FOR v_item IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'assignments', '[]'::JSONB))
   LOOP
     INSERT INTO public.class_subject_teachers (
-      institute_id, academic_year_id, section_id, subject_id, teacher_id
+      academic_year_id, section_id, subject_id, teacher_id
     ) VALUES (
-      v_institute_id,
       (v_item->>'academic_year_id')::UUID,
       (v_item->>'section_id')::UUID,
       (v_item->>'subject_id')::UUID,
@@ -412,15 +348,15 @@ BEGIN
   IF v_class_teacher_section_id IS NOT NULL THEN
     UPDATE public.sections
     SET class_teacher_id = v_profile_id
-    WHERE id = v_class_teacher_section_id AND institute_id = v_institute_id;
+    WHERE id = v_class_teacher_section_id;
   END IF;
 
   -- Documents
   FOR v_item IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'documents', '[]'::JSONB))
   LOOP
-    INSERT INTO public.teacher_documents (institute_id, teacher_id, doc_type, file_name, file_url)
+    INSERT INTO public.teacher_documents (teacher_id, doc_type, file_name, file_url)
     VALUES (
-      v_institute_id, v_teacher_id,
+      v_teacher_id,
       v_item->>'doc_type',
       NULLIF(v_item->>'file_name', ''),
       v_item->>'file_url'
@@ -430,10 +366,10 @@ BEGIN
   -- Salary & Bank Details
   IF payload ? 'bank_details' AND payload->'bank_details' IS NOT NULL THEN
     INSERT INTO public.teacher_bank_details (
-      institute_id, teacher_id, basic_salary, allowances, deductions,
+      teacher_id, basic_salary, allowances, deductions,
       bank_name, account_number, ifsc_code, account_holder_name, pf_number, esi_number
     ) VALUES (
-      v_institute_id, v_teacher_id,
+      v_teacher_id,
       COALESCE((payload->'bank_details'->>'basic_salary')::NUMERIC, 0),
       COALESCE((payload->'bank_details'->>'allowances')::NUMERIC, 0),
       COALESCE((payload->'bank_details'->>'deductions')::NUMERIC, 0),
@@ -451,7 +387,6 @@ END;
 $$;
 
 -- 11. Transactional RPC: set_teacher_active(p_teacher_id uuid, p_is_active boolean)
--- Soft deactivate/activate only (never hard delete)
 CREATE OR REPLACE FUNCTION public.set_teacher_active(
   p_teacher_id UUID,
   p_is_active BOOLEAN
@@ -462,7 +397,6 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_institute_id UUID := public.get_my_institute_id();
   v_profile_id UUID;
 BEGIN
   IF public.get_my_role() NOT IN ('super_admin', 'principal') THEN
@@ -471,7 +405,7 @@ BEGIN
 
   SELECT profile_id INTO v_profile_id
   FROM public.teachers
-  WHERE id = p_teacher_id AND institute_id = v_institute_id;
+  WHERE id = p_teacher_id;
 
   IF v_profile_id IS NULL THEN
     RAISE EXCEPTION 'Teacher not found';
@@ -479,12 +413,12 @@ BEGIN
 
   UPDATE public.profiles
   SET is_active = p_is_active
-  WHERE id = v_profile_id AND institute_id = v_institute_id;
+  WHERE id = v_profile_id;
 
   UPDATE public.teachers
   SET
     status = CASE WHEN p_is_active THEN 'active'::public.teacher_status ELSE 'inactive'::public.teacher_status END,
     updated_at = NOW()
-  WHERE id = p_teacher_id AND institute_id = v_institute_id;
+  WHERE id = p_teacher_id;
 END;
 $$;

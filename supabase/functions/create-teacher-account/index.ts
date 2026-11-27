@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
   const { data: callerProfile } = await adminClient
     .from('profiles')
-    .select('role, institute_id')
+    .select('role')
     .eq('id', caller.user.id)
     .single();
 
@@ -45,7 +45,6 @@ Deno.serve(async (req) => {
     await adminClient.auth.admin.inviteUserByEmail(email, {
       data: {
         role: 'teacher',
-        institute_id: callerProfile.institute_id,
         first_name: payload.first_name,
         last_name: payload.last_name,
       },

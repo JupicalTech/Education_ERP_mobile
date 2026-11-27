@@ -3,7 +3,7 @@ import 'user_role.dart';
 class Profile {
   const Profile({
     required this.id,
-    required this.instituteId,
+    this.instituteId = '',
     required this.role,
     required this.firstName,
     required this.lastName,
@@ -26,7 +26,7 @@ class Profile {
   factory Profile.fromJson(Map<String, dynamic> json) {
     return Profile(
       id: json['id'] as String,
-      instituteId: json['institute_id'] as String,
+      instituteId: (json['institute_id'] as String?) ?? '',
       role: UserRole.fromString(json['role'] as String),
       firstName: (json['first_name'] as String?) ?? '',
       lastName: (json['last_name'] as String?) ?? '',

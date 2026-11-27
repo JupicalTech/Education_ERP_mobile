@@ -1,5 +1,5 @@
--- Student Admission Schema & Transactional RPC
--- Depends on V1 tables & RLS helpers: get_my_institute_id(), get_my_role(), get_my_student_ids()
+-- Student Admission Schema & Transactional RPC (Single-Institute)
+-- Depends on V1 tables & RLS helpers: get_my_role(), get_my_student_ids()
 
 -- 1. Extend students table with full admission, basic, and address fields
 ALTER TABLE public.students
@@ -36,7 +36,6 @@ ALTER TABLE public.students
 -- 2. Guardians table (parents/guardians may not have auth profiles at admission)
 CREATE TABLE IF NOT EXISTS public.guardians (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  institute_id UUID NOT NULL REFERENCES public.institutes(id) ON DELETE CASCADE,
   profile_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   phone TEXT NOT NULL,
@@ -54,14 +53,12 @@ ALTER TABLE public.student_parents
   ADD COLUMN IF NOT EXISTS guardian_id UUID REFERENCES public.guardians(id) ON DELETE CASCADE,
   ALTER COLUMN parent_profile_id DROP NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_guardians_institute ON public.guardians(institute_id);
-CREATE INDEX IF NOT EXISTS idx_guardians_phone ON public.guardians(institute_id, phone);
+CREATE INDEX IF NOT EXISTS idx_guardians_phone ON public.guardians(phone);
 CREATE INDEX IF NOT EXISTS idx_student_parents_guardian ON public.student_parents(guardian_id);
 
 -- 3. Previous schools table
 CREATE TABLE IF NOT EXISTS public.student_previous_schools (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  institute_id UUID NOT NULL REFERENCES public.institutes(id) ON DELETE CASCADE,
   student_id UUID NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
   school_name TEXT NOT NULL,
   board TEXT,
@@ -79,7 +76,6 @@ CREATE INDEX IF NOT EXISTS idx_prev_schools_student ON public.student_previous_s
 -- 4. Student documents table (Supabase Storage references)
 CREATE TABLE IF NOT EXISTS public.student_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  institute_id UUID NOT NULL REFERENCES public.institutes(id) ON DELETE CASCADE,
   student_id UUID NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
   doc_type TEXT NOT NULL,
   file_name TEXT,
@@ -92,7 +88,6 @@ CREATE INDEX IF NOT EXISTS idx_student_docs_student ON public.student_documents(
 -- 5. Student medical info table (isolated for stricter RLS)
 CREATE TABLE IF NOT EXISTS public.student_medical_info (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  institute_id UUID NOT NULL REFERENCES public.institutes(id) ON DELETE CASCADE,
   student_id UUID NOT NULL UNIQUE REFERENCES public.students(id) ON DELETE CASCADE,
   allergies TEXT,
   conditions TEXT,
@@ -110,103 +105,61 @@ ALTER TABLE public.student_medical_info ENABLE ROW LEVEL SECURITY;
 -- Guardians RLS
 CREATE POLICY guardians_staff_all ON public.guardians
   FOR ALL
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal', 'fee_clerk')
-  )
-  WITH CHECK (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal', 'fee_clerk')
-  );
+  USING (public.get_my_role() IN ('super_admin', 'principal', 'fee_clerk'))
+  WITH CHECK (public.get_my_role() IN ('super_admin', 'principal', 'fee_clerk'));
 
 CREATE POLICY guardians_teacher_read ON public.guardians
   FOR SELECT
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() = 'teacher'
-  );
+  USING (public.get_my_role() = 'teacher');
 
 CREATE POLICY guardians_parent_self ON public.guardians
   FOR SELECT
   USING (
-    institute_id = public.get_my_institute_id()
-    AND (
-      profile_id = auth.uid()
-      OR id IN (
-        SELECT sp.guardian_id FROM public.student_parents sp
-        WHERE sp.student_id IN (SELECT public.get_my_student_ids())
-      )
+    profile_id = auth.uid()
+    OR id IN (
+      SELECT sp.guardian_id FROM public.student_parents sp
+      WHERE sp.student_id IN (SELECT public.get_my_student_ids())
     )
   );
 
 -- Previous schools RLS
 CREATE POLICY prev_schools_admin_all ON public.student_previous_schools
   FOR ALL
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal', 'fee_clerk')
-  )
-  WITH CHECK (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal', 'fee_clerk')
-  );
+  USING (public.get_my_role() IN ('super_admin', 'principal', 'fee_clerk'))
+  WITH CHECK (public.get_my_role() IN ('super_admin', 'principal', 'fee_clerk'));
 
 CREATE POLICY prev_schools_parent_student_read ON public.student_previous_schools
   FOR SELECT
   USING (
-    institute_id = public.get_my_institute_id()
-    AND (
-      public.get_my_role() = 'teacher'
-      OR student_id IN (SELECT public.get_my_student_ids())
-    )
+    public.get_my_role() = 'teacher'
+    OR student_id IN (SELECT public.get_my_student_ids())
   );
 
 -- Student documents RLS
 CREATE POLICY student_docs_admin_all ON public.student_documents
   FOR ALL
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal', 'fee_clerk')
-  )
-  WITH CHECK (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal', 'fee_clerk')
-  );
+  USING (public.get_my_role() IN ('super_admin', 'principal', 'fee_clerk'))
+  WITH CHECK (public.get_my_role() IN ('super_admin', 'principal', 'fee_clerk'));
 
 CREATE POLICY student_docs_parent_student_read ON public.student_documents
   FOR SELECT
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND student_id IN (SELECT public.get_my_student_ids())
-  );
+  USING (student_id IN (SELECT public.get_my_student_ids()));
 
 -- Medical info RLS (stricter: excludes fee_clerk from reading medical notes)
 CREATE POLICY medical_info_principal_all ON public.student_medical_info
   FOR ALL
-  USING (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  )
-  WITH CHECK (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() IN ('super_admin', 'principal')
-  );
+  USING (public.get_my_role() IN ('super_admin', 'principal'))
+  WITH CHECK (public.get_my_role() IN ('super_admin', 'principal'));
 
 CREATE POLICY medical_info_clerk_insert ON public.student_medical_info
   FOR INSERT
-  WITH CHECK (
-    institute_id = public.get_my_institute_id()
-    AND public.get_my_role() = 'fee_clerk'
-  );
+  WITH CHECK (public.get_my_role() = 'fee_clerk');
 
 CREATE POLICY medical_info_teacher_parent_read ON public.student_medical_info
   FOR SELECT
   USING (
-    institute_id = public.get_my_institute_id()
-    AND (
-      public.get_my_role() = 'teacher'
-      OR student_id IN (SELECT public.get_my_student_ids())
-    )
+    public.get_my_role() = 'teacher'
+    OR student_id IN (SELECT public.get_my_student_ids())
   );
 
 -- 7. Single-transaction admission RPC
@@ -217,7 +170,6 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_institute_id UUID := public.get_my_institute_id();
   v_role public.user_role := public.get_my_role();
   v_student JSONB := payload -> 'student';
   v_enrollment JSONB := payload -> 'enrollment';
@@ -234,14 +186,12 @@ DECLARE
   v_doc JSONB;
   v_sibling_ids UUID[];
 BEGIN
-  IF v_institute_id IS NULL OR v_role NOT IN ('super_admin', 'principal', 'fee_clerk') THEN
+  IF v_role NOT IN ('super_admin', 'principal', 'fee_clerk') THEN
     RAISE EXCEPTION 'Unauthorized to create student admission';
   END IF;
 
-  -- Generate sequential admission number per institute & year
-  SELECT COUNT(*) + 1 INTO v_seq
-  FROM public.students
-  WHERE institute_id = v_institute_id;
+  -- Generate sequential admission number
+  SELECT COUNT(*) + 1 INTO v_seq FROM public.students;
 
   v_admission_number := 'ADM-' || EXTRACT(YEAR FROM COALESCE((v_student->>'admission_date')::DATE, CURRENT_DATE))::TEXT
     || '-' || LPAD(v_seq::TEXT, 4, '0');
@@ -251,7 +201,7 @@ BEGIN
   ) INTO v_sibling_ids;
 
   INSERT INTO public.students (
-    institute_id, admission_number, first_name, middle_name, last_name,
+    admission_number, first_name, middle_name, last_name,
     date_of_birth, gender, photo_url, blood_group, nationality, religion,
     mother_tongue, category, aadhaar_number, admission_date, gr_number,
     admission_type, student_type, medium_of_instruction,
@@ -260,7 +210,6 @@ BEGIN
     transport_needed, transport_route_stop, special_needs, sibling_ids
   )
   VALUES (
-    v_institute_id,
     v_admission_number,
     v_student->>'first_name',
     v_student->>'middle_name',
@@ -299,29 +248,26 @@ BEGIN
   -- Resolve academic year, class, section and insert enrollment
   SELECT id INTO v_academic_year_id
   FROM public.academic_years
-  WHERE institute_id = v_institute_id
-    AND (name = v_enrollment->>'academic_year' OR is_current = TRUE)
+  WHERE (name = v_enrollment->>'academic_year' OR is_current = TRUE)
   ORDER BY (name = v_enrollment->>'academic_year') DESC
   LIMIT 1;
 
   SELECT id INTO v_class_id
   FROM public.classes
-  WHERE institute_id = v_institute_id AND name = v_enrollment->>'class_name'
+  WHERE name = v_enrollment->>'class_name'
   LIMIT 1;
 
   SELECT id INTO v_section_id
   FROM public.sections
-  WHERE institute_id = v_institute_id
-    AND class_id = v_class_id
+  WHERE class_id = v_class_id
     AND name = v_enrollment->>'section_name'
   LIMIT 1;
 
   IF v_academic_year_id IS NOT NULL AND v_class_id IS NOT NULL AND v_section_id IS NOT NULL THEN
     INSERT INTO public.student_enrollments (
-      institute_id, student_id, academic_year_id, class_id, section_id, roll_number
+      student_id, academic_year_id, class_id, section_id, roll_number
     )
     VALUES (
-      v_institute_id,
       v_student_id,
       v_academic_year_id,
       v_class_id,
@@ -334,10 +280,9 @@ BEGIN
   FOR v_guardian IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'guardians', '[]'::JSONB))
   LOOP
     INSERT INTO public.guardians (
-      institute_id, name, phone, email, occupation, qualification, annual_income, relationship
+      name, phone, email, occupation, qualification, annual_income, relationship
     )
     VALUES (
-      v_institute_id,
       v_guardian->>'name',
       v_guardian->>'phone',
       v_guardian->>'email',
@@ -349,10 +294,9 @@ BEGIN
     RETURNING id INTO v_guardian_id;
 
     INSERT INTO public.student_parents (
-      institute_id, student_id, guardian_id, relationship, is_primary
+      student_id, guardian_id, relationship, is_primary
     )
     VALUES (
-      v_institute_id,
       v_student_id,
       v_guardian_id,
       v_guardian->>'relationship',
@@ -364,11 +308,10 @@ BEGIN
   FOR v_school IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'previous_schools', '[]'::JSONB))
   LOOP
     INSERT INTO public.student_previous_schools (
-      institute_id, student_id, school_name, board, last_class_attended,
+      student_id, school_name, board, last_class_attended,
       year_of_passing, percentage_or_grade, reason_for_leaving, tc_number, tc_date
     )
     VALUES (
-      v_institute_id,
       v_student_id,
       v_school->>'school_name',
       v_school->>'board',
@@ -388,10 +331,9 @@ BEGIN
     OR v_medical->>'doctor_contact' IS NOT NULL
   ) THEN
     INSERT INTO public.student_medical_info (
-      institute_id, student_id, allergies, conditions, doctor_contact
+      student_id, allergies, conditions, doctor_contact
     )
     VALUES (
-      v_institute_id,
       v_student_id,
       v_medical->>'allergies',
       v_medical->>'conditions',
@@ -403,10 +345,9 @@ BEGIN
   FOR v_doc IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'documents', '[]'::JSONB))
   LOOP
     INSERT INTO public.student_documents (
-      institute_id, student_id, doc_type, file_name, file_url
+      student_id, doc_type, file_name, file_url
     )
     VALUES (
-      v_institute_id,
       v_student_id,
       v_doc->>'doc_type',
       v_doc->>'file_name',
