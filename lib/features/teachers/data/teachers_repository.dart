@@ -346,17 +346,15 @@ class SupabaseTeachersRepository implements TeachersRepository {
 
   @override
   Future<Teacher> updateTeacher(String teacherId, Teacher updated) async {
-    // Ready for update_teacher RPC when migration is extended
+    await _client.rpc<String>(
+      'update_teacher',
+      params: {'p_teacher_id': teacherId, 'payload': updated.toRpcPayload()},
+    );
+
     final row = await _client
         .from('teachers')
-        .update({
-          'designation': updated.designation,
-          'department': updated.department,
-          'employment_type': updated.employmentType.dbValue,
-          'status': updated.status.dbValue,
-        })
-        .eq('id', teacherId)
         .select('*, profiles!teachers_profile_id_fkey(*)')
+        .eq('id', teacherId)
         .single();
     return Teacher.fromJson(row);
   }

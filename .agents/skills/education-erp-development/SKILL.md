@@ -63,6 +63,23 @@ Adds staff/teacher management and transactional RPCs:
 ### Edge Function: `supabase/functions/create-teacher-account/index.ts`
 Uses the Supabase Service Role key to create an `auth.users` account for a new teacher and invoke `create_teacher`.
 
+### Migration 4: `supabase/migrations/0004_edit_rpcs.sql`
+Adds transactional edit RPCs matching the create flows:
+* `update_student_admission(p_student_id, payload)`: Updates `students`, upserts `student_enrollments`, replaces `guardians` / `student_parents`, `student_previous_schools`, `student_documents`, and updates `student_medical_info` (strictly `principal` / `super_admin` only; `fee_clerk` cannot touch medical info).
+* `update_teacher(p_teacher_id, payload)`: Strictly `principal` / `super_admin` only; updates `profiles` & `teachers`, replaces `teacher_qualifications`, `teacher_experience`, `teacher_subjects`, `class_subject_teachers`, `teacher_documents`, updates `sections.class_teacher_id`, and upserts `teacher_bank_details`.
+
+### Migration 5: `supabase/migrations/0005_academic_years_and_mappings.sql`
+* Enforces at most one current academic year at the DB level via partial unique index `idx_academic_years_single_current` (`WHERE is_current = TRUE`).
+* Adds `save_academic_year(p_id, p_name, p_start_date, p_end_date, p_is_current)` and `set_current_academic_year(p_academic_year_id)` RPCs (`principal` / `super_admin` only).
+* Adds `assign_section_subject_teacher(p_section_id, p_subject_id, p_teacher_profile_id, p_academic_year_id)` RPC to map subjects & teachers to sections for the current academic year.
+
+### Migration 6: `supabase/migrations/0006_attendance.sql`
+Adds daily attendance, leave requests, absence notifications, and reporting RPCs:
+* **Enums**: `attendance_status` (`'present'`, `'absent'`, `'late'`, `'half_day'`, `'leave'`), `leave_request_status` (`'pending'`, `'approved'`, `'rejected'`).
+* **Tables**: `student_attendance` (unique on `(student_id, date)`, tied to `section_id` and `academic_year_id`), `leave_requests`, and `notifications` (ready for future push/SMS).
+* **RLS**: Teachers can read/mark attendance and review leave only for their `class_teacher_id` sections; parents/students read via `get_my_student_ids()`; `principal`/`super_admin` have full access; `fee_clerk` has no attendance access.
+* **RPCs**: `get_attendance_sections`, `get_section_attendance_roster`, `submit_section_attendance` (idempotent bulk upsert accepting exceptions + creating absence notifications for linked parents), `submit_leave_request`, `review_leave_request` (auto-marks `'leave'` on approved dates), `get_daily_attendance_summary`, `get_student_monthly_attendance`, `get_low_attendance_students`, and `get_attendance_dashboard_stats`.
+
 ---
 
 ## 4. Row-Level Security (RLS) Blueprint
@@ -106,7 +123,9 @@ lib/
   features/
     auth/{data,presentation,providers}
     home/{data,providers} + 6 role home screens
+    academic_years/{data,presentation,providers}
     classes/{data,presentation,providers}
+    subjects/{data,presentation,providers}
     admissions/{data,presentation,providers}
     students/{data,presentation,providers}
     teachers/{data,presentation,providers}
@@ -139,26 +158,26 @@ lib/
 3. `go_router` (`routerProvider`) with role-based redirect guards (logged out → `/login`, logged in → role home, cross-role routes blocked).
 4. Design system (`core/theme/`), shared widgets (`core/widgets/`), and `ResponsiveScaffold` (bottom `NavigationBar` < 900px, `NavigationRail` ≥ 900px).
 5. `LoginScreen` (email/password + 5 quick-login role buttons for `Principal`, `Fee Clerk`, `Teacher`, `Student`, `Parent` signing in via `<role>@school.edu` / `password123`) + 6 role home screens.
-6. V1 feature UIs: **Classes & Sections** (add class with common-name quick-fill, multi-select sections + custom section `+` button, add/delete sections inside each class), **Students** (directory, detail/edit, multi-step admission), **Teachers** (directory, 7-step form, detail/edit, activate/deactivate), **Attendance** (section roll-call), **Fees** (dues & collection), **Admissions**.
+6. V1 feature UIs: **Academic Years** (create/edit sessions with April–March default or custom dates, set current year), **Classes & Sections** (add class with common-name quick-fill, multi-select sections + custom section `+` button, add/delete sections inside each class), **Subjects & Teacher Mapping** (CRUD subjects + assign section-subject-teacher for current year), **Students** (directory, detail/edit, multi-step admission), **Teachers** (directory, 7-step form, detail/edit, activate/deactivate), **Attendance** (section roll-call), **Fees** (dues & collection), **Admissions**.
 
 ### Backend Wiring Status
 * **Live on Supabase**:
   * **Auth** (`lib/features/auth/providers/auth_providers.dart` → `SupabaseAuthRepository`)
+  * **Academic Years** (`lib/features/academic_years/providers/academic_years_providers.dart` → `SupabaseAcademicYearsRepository`)
   * **Classes & Sections** (`lib/features/classes/providers/classes_providers.dart` → `SupabaseClassesRepository`)
-  * **Students** (`lib/features/students/providers/students_providers.dart` → `SupabaseStudentsRepository`)
-  * **Teachers** (`lib/features/teachers/providers/teachers_providers.dart` → `SupabaseTeachersRepository`)
+  * **Subjects & Section-Teacher Mapping** (`lib/features/subjects/providers/subjects_providers.dart` → `SupabaseSubjectsRepository`)
+  * **Students** (`lib/features/students/providers/students_providers.dart` → `SupabaseStudentsRepository`, including `create_student_admission` & `update_student_admission` RPCs)
+  * **Teachers** (`lib/features/teachers/providers/teachers_providers.dart` → `SupabaseTeachersRepository`, including `create_teacher`, `update_teacher`, & `set_teacher_active` RPCs)
+  * **Attendance** (`lib/features/attendance/providers/attendance_providers.dart` → `SupabaseAttendanceRepository`: section roll-call, leave requests & approvals, parent/student views, principal reports, and home attendance stats)
 * **Still using Stub / Dummy Data**:
-  * **Attendance** (`features/attendance/`)
   * **Fees** (`features/fees/`)
   * **Admissions** (`features/admissions/`)
-  * **Home Dashboard Stats** (`features/home/`)
+  * **Home Dashboard (non-attendance stats)** (`features/home/`)
   * **Notices**
 
 ### Next Steps
-1. Wire **Attendance** (add `student_attendance` migration + RPCs, then wire `SupabaseAttendanceRepository`).
-2. Wire **Fees** (add fee tables + payment RPC, then wire `SupabaseFeesRepository`).
-3. Wire **Admissions**, **Home**, and **Notices** to Supabase.
-4. Add `update_student_admission` and `update_teacher` RPCs in SQL migrations to match the edit flows in `SupabaseStudentsRepository` and `SupabaseTeachersRepository`.
+1. Wire **Fees** (add fee tables + payment RPC, then wire `SupabaseFeesRepository`).
+2. Wire **Admissions**, **Home**, and **Notices** to Supabase.
 
 ---
 

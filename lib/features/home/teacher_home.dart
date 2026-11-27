@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/widgets.dart';
+import '../attendance/presentation/leave_requests_view.dart';
 import '../attendance/presentation/mark_attendance_view.dart';
+import '../attendance/providers/attendance_providers.dart';
 import '../auth/providers/auth_providers.dart';
 import 'data/home_dummy_data.dart';
 import 'providers/home_providers.dart';
@@ -29,6 +31,11 @@ class TeacherHome extends ConsumerWidget {
           selectedIcon: Icons.fact_check_rounded,
         ),
         NavDestination(
+          label: 'Leave',
+          icon: Icons.event_busy_outlined,
+          selectedIcon: Icons.event_busy_rounded,
+        ),
+        NavDestination(
           label: 'Homework',
           icon: Icons.assignment_outlined,
           selectedIcon: Icons.assignment_rounded,
@@ -37,6 +44,7 @@ class TeacherHome extends ConsumerWidget {
       bodies: [
         _TeacherDashboardTab(classes: classes),
         const MarkAttendanceView(),
+        const LeaveRequestsView(canReview: true),
         const EmptyState(
           icon: Icons.assignment_outlined,
           title: 'Homework & Assignments',
@@ -66,7 +74,8 @@ class _TeacherDashboardTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider).value;
-    final pendingCount = classes.where((c) => !c.attendanceMarked).length;
+    final attStats = ref.watch(attendanceDashboardStatsProvider).value;
+    final pendingCount = attStats?.pendingSections ?? 0;
     final totalStudents = classes.fold<int>(0, (sum, c) => sum + c.studentCount);
     final isDesktop =
         MediaQuery.sizeOf(context).width >= AppSpacing.desktopBreakpoint;

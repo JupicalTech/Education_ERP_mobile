@@ -2,11 +2,12 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/supabase_client.dart';
 import '../data/attendance_model.dart';
 import '../data/attendance_repository.dart';
 
 final attendanceRepositoryProvider = Provider<AttendanceRepository>(
-  (ref) => StubAttendanceRepository(),
+  (ref) => SupabaseAttendanceRepository(ref.watch(supabaseProvider)),
 );
 
 final attendanceSectionsProvider = FutureProvider<List<AttendanceSection>>((
@@ -91,7 +92,15 @@ class AttendanceRosterNotifier
 
     await ref
         .read(attendanceRepositoryProvider)
-        .saveAttendance(sectionId: section.id, date: date, entries: entries);
+        .submitSectionAttendance(
+          sectionId: section.id,
+          date: date,
+          entries: entries,
+        );
+
+    ref.invalidate(attendanceDashboardStatsProvider);
+    ref.invalidate(dailyAttendanceSummaryProvider);
+    ref.invalidate(lowAttendanceStudentsProvider);
   }
 }
 
@@ -99,3 +108,134 @@ final attendanceRosterProvider =
     AsyncNotifierProvider<AttendanceRosterNotifier, List<AttendanceRosterEntry>>(
       AttendanceRosterNotifier.new,
     );
+
+// --- Leave Requests ---
+
+class LeaveRequestsNotifier extends AsyncNotifier<List<LeaveRequestItem>> {
+  @override
+  FutureOr<List<LeaveRequestItem>> build() {
+    return ref.watch(attendanceRepositoryProvider).fetchLeaveRequests();
+  }
+
+  Future<void> submit({
+    required String studentId,
+    required DateTime fromDate,
+    required DateTime toDate,
+    required String reason,
+  }) async {
+    await ref
+        .read(attendanceRepositoryProvider)
+        .submitLeaveRequest(
+          studentId: studentId,
+          fromDate: fromDate,
+          toDate: toDate,
+          reason: reason,
+        );
+    state = AsyncData(
+      await ref.read(attendanceRepositoryProvider).fetchLeaveRequests(),
+    );
+  }
+
+  Future<void> review({
+    required String leaveId,
+    required LeaveRequestStatus status,
+    String? note,
+  }) async {
+    await ref
+        .read(attendanceRepositoryProvider)
+        .reviewLeaveRequest(leaveId: leaveId, status: status, note: note);
+    state = AsyncData(
+      await ref.read(attendanceRepositoryProvider).fetchLeaveRequests(),
+    );
+    ref.invalidate(attendanceRosterProvider);
+    ref.invalidate(attendanceDashboardStatsProvider);
+    ref.invalidate(dailyAttendanceSummaryProvider);
+  }
+}
+
+final leaveRequestsProvider =
+    AsyncNotifierProvider<LeaveRequestsNotifier, List<LeaveRequestItem>>(
+      LeaveRequestsNotifier.new,
+    );
+
+// --- Parent & Student Views ---
+
+final myAttendanceStudentsProvider = FutureProvider<List<MyStudentSummary>>((
+  ref,
+) {
+  return ref.watch(attendanceRepositoryProvider).fetchMyStudents();
+});
+
+class _MonthNotifier extends Notifier<DateTime> {
+  @override
+  DateTime build() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month);
+  }
+
+  void setMonth(DateTime month) => state = DateTime(month.year, month.month);
+}
+
+final studentAttendanceMonthProvider = NotifierProvider<_MonthNotifier, DateTime>(
+  _MonthNotifier.new,
+);
+
+final studentMonthlySummaryProvider =
+    FutureProvider.family<MonthlyAttendanceSummary, String>((ref, studentId) {
+      final month = ref.watch(studentAttendanceMonthProvider);
+      return ref
+          .watch(attendanceRepositoryProvider)
+          .fetchMonthlySummary(
+            studentId: studentId,
+            year: month.year,
+            month: month.month,
+          );
+    });
+
+final studentAttendanceHistoryProvider =
+    FutureProvider.family<List<StudentAttendanceRecord>, String>((
+      ref,
+      studentId,
+    ) {
+      final month = ref.watch(studentAttendanceMonthProvider);
+      return ref
+          .watch(attendanceRepositoryProvider)
+          .fetchStudentHistory(
+            studentId: studentId,
+            year: month.year,
+            month: month.month,
+          );
+    });
+
+// --- Principal Reports & Dashboard ---
+
+final dailyAttendanceSummaryProvider =
+    FutureProvider<List<DailySectionSummary>>((ref) {
+      final date = ref.watch(attendanceDateProvider);
+      return ref.watch(attendanceRepositoryProvider).fetchDailySummary(date);
+    });
+
+class _ThresholdNotifier extends Notifier<double> {
+  @override
+  double build() => 75.0;
+  void setThreshold(double value) => state = value;
+}
+
+final lowAttendanceThresholdProvider =
+    NotifierProvider<_ThresholdNotifier, double>(_ThresholdNotifier.new);
+
+final lowAttendanceStudentsProvider =
+    FutureProvider<List<LowAttendanceStudent>>((ref) {
+      final threshold = ref.watch(lowAttendanceThresholdProvider);
+      return ref
+          .watch(attendanceRepositoryProvider)
+          .fetchLowAttendanceStudents(threshold: threshold);
+    });
+
+final attendanceDashboardStatsProvider =
+    FutureProvider<AttendanceDashboardStats>((ref) {
+      final now = DateTime.now();
+      return ref
+          .watch(attendanceRepositoryProvider)
+          .fetchDashboardStats(DateTime(now.year, now.month, now.day));
+    });

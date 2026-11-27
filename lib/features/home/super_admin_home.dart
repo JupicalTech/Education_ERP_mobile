@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/widgets.dart';
+import '../academic_years/presentation/academic_years_view.dart';
+import '../classes/presentation/classes_view.dart';
+import '../subjects/presentation/subjects_view.dart';
 import '../teachers/presentation/teachers_list_view.dart';
 
 class SuperAdminHome extends StatelessWidget {
@@ -26,6 +29,21 @@ class SuperAdminHome extends StatelessWidget {
           label: 'Teachers',
           icon: Icons.badge_outlined,
           selectedIcon: Icons.badge_rounded,
+        ),
+        NavDestination(
+          label: 'Classes',
+          icon: Icons.class_outlined,
+          selectedIcon: Icons.class_rounded,
+        ),
+        NavDestination(
+          label: 'Subjects',
+          icon: Icons.menu_book_outlined,
+          selectedIcon: Icons.menu_book_rounded,
+        ),
+        NavDestination(
+          label: 'Years',
+          icon: Icons.calendar_month_outlined,
+          selectedIcon: Icons.calendar_month_rounded,
         ),
         NavDestination(
           label: 'Settings',
@@ -77,6 +95,9 @@ class SuperAdminHome extends StatelessWidget {
           subtitle: 'School onboarding and tenant management will appear here.',
         ),
         const TeachersListView(),
+        const ClassesView(),
+        const SubjectsView(),
+        const AcademicYearsView(),
         const EmptyState(
           icon: Icons.settings_outlined,
           title: 'System Settings',

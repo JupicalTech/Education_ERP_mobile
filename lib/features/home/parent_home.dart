@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/widgets.dart';
+import '../attendance/presentation/my_attendance_view.dart';
 import 'providers/home_providers.dart';
 
 class ParentHome extends ConsumerWidget {
@@ -167,11 +168,7 @@ class ParentHome extends ConsumerWidget {
             ),
           ],
         ),
-        const EmptyState(
-          icon: Icons.event_available_outlined,
-          title: 'Attendance History',
-          subtitle: 'Monthly calendar and leave requests will appear here.',
-        ),
+        const MyAttendanceView(isParent: true),
         const EmptyState(
           icon: Icons.receipt_long_outlined,
           title: 'Fee Invoices & Receipts',

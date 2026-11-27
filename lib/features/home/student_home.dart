@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/widgets.dart';
+import '../attendance/presentation/my_attendance_view.dart';
 
 class StudentHome extends StatelessWidget {
   const StudentHome({super.key});
@@ -74,11 +75,7 @@ class StudentHome extends StatelessWidget {
             ),
           ],
         ),
-        const EmptyState(
-          icon: Icons.event_available_outlined,
-          title: 'My Attendance',
-          subtitle: 'Daily attendance log will appear here.',
-        ),
+        const MyAttendanceView(isParent: false),
         const EmptyState(
           icon: Icons.receipt_long_outlined,
           title: 'My Fees',

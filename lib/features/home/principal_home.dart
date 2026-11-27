@@ -3,12 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/widgets.dart';
+import '../academic_years/presentation/academic_years_view.dart';
 import '../admissions/presentation/admissions_view.dart';
 import '../admissions/presentation/new_enquiry_screen.dart';
+import '../attendance/presentation/attendance_reports_view.dart';
+import '../attendance/providers/attendance_providers.dart';
 import '../auth/providers/auth_providers.dart';
 import '../classes/presentation/classes_view.dart';
 import '../fees/presentation/fees_dues_view.dart';
 import '../students/presentation/students_list_view.dart';
+import '../subjects/presentation/subjects_view.dart';
 import '../teachers/presentation/teachers_list_view.dart';
 import 'data/home_dummy_data.dart';
 import 'providers/home_providers.dart';
@@ -49,6 +53,21 @@ class PrincipalHome extends ConsumerWidget {
           selectedIcon: Icons.class_rounded,
         ),
         NavDestination(
+          label: 'Subjects',
+          icon: Icons.menu_book_outlined,
+          selectedIcon: Icons.menu_book_rounded,
+        ),
+        NavDestination(
+          label: 'Years',
+          icon: Icons.calendar_month_outlined,
+          selectedIcon: Icons.calendar_month_rounded,
+        ),
+        NavDestination(
+          label: 'Attendance',
+          icon: Icons.fact_check_outlined,
+          selectedIcon: Icons.fact_check_rounded,
+        ),
+        NavDestination(
           label: 'Fees',
           icon: Icons.account_balance_wallet_outlined,
           selectedIcon: Icons.account_balance_wallet_rounded,
@@ -65,6 +84,9 @@ class PrincipalHome extends ConsumerWidget {
         const StudentsListView(),
         const TeachersListView(),
         const ClassesView(),
+        const SubjectsView(),
+        const AcademicYearsView(),
+        const AttendanceReportsView(),
         const FeesDuesView(readOnly: true),
         _NoticesTab(data: data),
       ],
@@ -80,6 +102,13 @@ class _OverviewTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider).value;
+    final attStats = ref.watch(attendanceDashboardStatsProvider).value;
+    final todayAttLabel = attStats != null && attStats.totalMarked > 0
+        ? '${attStats.attendancePercent.toStringAsFixed(0)}%'
+        : '0%';
+    final todayAttSub = attStats != null
+        ? '${attStats.markedSections}/${attStats.totalSections} sections marked'
+        : 'Checking today...';
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
     final isDesktop =
@@ -91,7 +120,7 @@ class _OverviewTab extends ConsumerWidget {
         WelcomeBanner(
           greeting: 'Good morning, ${profile?.fullName ?? 'Principal'}!',
           subtitle:
-              'Attendance is ${data.todayAttendance} today with ${data.pendingDues} in pending fee dues.',
+              'Attendance is $todayAttLabel today with ${data.pendingDues} in pending fee dues.',
           actionLabel: 'New Enquiry',
           actionIcon: Icons.add,
           onAction: () => Navigator.of(context).push(
@@ -116,9 +145,9 @@ class _OverviewTab extends ConsumerWidget {
               ),
               StatCard(
                 icon: Icons.fact_check_outlined,
-                value: data.todayAttendance,
+                value: todayAttLabel,
                 label: "Today's Attendance",
-                subtitle: 'Marked by 9:30 AM',
+                subtitle: todayAttSub,
                 tone: StatTone.success,
               ),
               StatCard(
