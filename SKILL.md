@@ -14,8 +14,8 @@ This guide documents the architecture, database schema, Row-Level Security (RLS)
 * **Platform**: Cross-platform Flutter (Mobile for parents, students, and teachers; Responsive Web/Desktop for school management & fee clerks).
 * **Backend**: Supabase (PostgreSQL, Auth, Storage, Realtime, Edge Functions).
 * **Key Planned Integrations**: FCM (Push Notifications), Razorpay (Online Fee Payments).
-* **Architectural Principle**: **Smart Backend, Dumb Client**. Business rules (ID generation, transactional multi-table writes, attendance validation, fee calculations) and security constraints reside in PostgreSQL functions, triggers, and RLS policies rather than the Flutter client.
-* **Multi-Institute (Multi-Tenant) Model**: Every table includes an `institute_id` column protected by RLS. Multiple schools can share the same Supabase database while remaining completely isolated from each other.
+* **Architectural Principle**: **Smart Backend, Dumb Client**. Business rules (ID generation, transactional multi-table writes, validation) and security constraints reside in PostgreSQL functions, triggers, and RLS policies rather than the Flutter client.
+* **Tenancy Scope (Current)**: **Single-Institute**. Multi-institute (`institutes` / `institute_id`) was intentionally removed so V1 stays simple and focused on one school first.
 
 ---
 
@@ -23,8 +23,8 @@ This guide documents the architecture, database schema, Row-Level Security (RLS)
 
 | Role | Primary User Interface | Responsibilities |
 | :--- | :--- | :--- |
-| **`super_admin`** | Web Dashboard | System configuration, multi-tenant setup, school onboarding. |
-| **`principal`** | Web & Mobile | Full academic management, approvals, analytics, school notices. |
+| **`super_admin`** | Web Dashboard | System configuration and admin oversight. |
+| **`principal`** | Web & Mobile | Full academic management, classes & sections, students, teachers, approvals, notices. |
 | **`fee_clerk`** | Web Dashboard | Fee structure setup, offline collection, receipts, dues tracking. |
 | **`teacher`** | Mobile / Tablet | Section attendance, subject marks, student performance, homework. |
 | **`parent`** | Mobile App | Tracking multi-child attendance, fee payments, receipts, notices. |
@@ -34,25 +34,19 @@ This guide documents the architecture, database schema, Row-Level Security (RLS)
 
 ## 3. Database Architecture & Migrations
 
-All SQL migrations live in `supabase/migrations/` and **must be run in order**:
+We build the database **incrementally** — tables and RPCs for each module are added only when that module is wired. All SQL migrations live in `supabase/migrations/` and **must be run in order**:
 
 ### Migration 1: `supabase/migrations/0001_v1_schema.sql`
-Creates the foundational enums, tables, RLS helper functions, and base RLS policies:
-* **Enums**:
-  * `user_role`: `'super_admin'`, `'principal'`, `'fee_clerk'`, `'teacher'`, `'student'`, `'parent'`
-  * `attendance_status`: `'present'`, `'absent'`, `'late'`, `'half_day'`
-  * `fee_payment_mode`: `'cash'`, `'upi'`, `'cheque'`, `'bank_transfer'`, `'online'`
-  * `fee_status`: `'pending'`, `'partial'`, `'paid'`, `'overdue'`
+Creates the foundational enum, core tables, RLS helper functions, and base RLS policies for **Auth, Classes/Subjects, and Students**:
+* **Enum**: `user_role` (`'super_admin'`, `'principal'`, `'fee_clerk'`, `'teacher'`, `'student'`, `'parent'`)
 * **Core Tables**:
-  1. `institutes`: Master tenant table (`id`, `name`, `code`, `phone`, `email`, `address`, `logo_url`).
-  2. `academic_years`: Session tracker (`id`, `institute_id`, `name`, `start_date`, `end_date`, `is_current`).
-  3. `profiles`: Extends `auth.users` (`id -> auth.users.id`, `institute_id`, `role`, `first_name`, `last_name`, `phone`, `avatar_url`, `is_active`).
-  4. `classes` & `sections`: Academic hierarchy (`classes`: `name`, `display_order`; `sections`: `class_id`, `name`, `class_teacher_id`).
-  5. `subjects` & `class_subject_teachers`: Subject definitions and teacher-to-section allocations per academic year.
-  6. `students`, `student_enrollments`, `student_parents`: Core student records, yearly class/section enrollments, and parent/guardian links.
-  7. `student_attendance`: Daily attendance ledger (`student_id`, `section_id`, `date`, `status`, `marked_by`), unique on `(student_id, date)`.
-  8. `fee_heads`, `fee_structures`, `student_fees`, `fee_payments`: Fee categories, class-level templates, student invoices/dues, and payment receipts.
-  9. `notices`: School announcements filtered by `target_role` and `target_class_id`.
+  1. `academic_years`: Session tracker (`id`, `name`, `start_date`, `end_date`, `is_current`).
+  2. `profiles`: Extends `auth.users` (`id -> auth.users.id`, `role`, `first_name`, `last_name`, `phone`, `avatar_url`, `is_active`).
+  3. `classes` & `sections`: Academic hierarchy (`classes`: `name`, `display_order`; `sections`: `class_id`, `name`, `class_teacher_id`).
+  4. `subjects` & `class_subject_teachers`: Subject definitions and teacher-to-section allocations per academic year.
+  5. `students`, `student_enrollments`, `student_parents`: Core student records, yearly class/section enrollments, and parent/guardian links.
+
+*(Attendance, Fees, and Notices tables are not in `0001` yet — they will be added in dedicated migrations when those modules are wired.)*
 
 ### Migration 2: `supabase/migrations/0002_student_admission.sql`
 Extends student admissions with full demographics and transactional creation:
@@ -73,16 +67,15 @@ Uses the Supabase Service Role key to create an `auth.users` account for a new t
 
 ## 4. Row-Level Security (RLS) Blueprint
 
-To keep policies fast and maintainable, three `SECURITY DEFINER` helper functions are defined in `0001_v1_schema.sql`:
+Two `SECURITY DEFINER` helper functions are defined in `0001_v1_schema.sql`:
 
-* `public.get_my_institute_id()`: Returns the logged-in user's `institute_id` from `profiles`.
 * `public.get_my_role()`: Returns the logged-in user's `user_role` from `profiles`.
 * `public.get_my_student_ids()`: Returns all `student_id`s linked to the logged-in parent via `student_parents`, plus the user's own student record if `students.profile_id = auth.uid()`. Use `student_id IN (SELECT public.get_my_student_ids())` in policies.
 
 ### Access Rules Summary
-* **Super Admins & Principals**: Full read/write access to all records within their `institute_id`.
-* **Fee Clerks**: Full CRUD on fee tables and student admissions; read-only on student profiles; excluded from reading `student_medical_info` and `teacher_bank_details`.
-* **Teachers**: Read/write `student_attendance` only for their assigned sections (as class teacher or subject teacher); read-only access to students and their own teacher record.
+* **Super Admins & Principals**: Full read/write access to all tables (`profiles`, `classes`, `sections`, `subjects`, `students`, `teachers`, etc.).
+* **Fee Clerks**: Full CRUD on student admissions (`students`, `guardians`, `student_parents`, `student_previous_schools`, `student_documents`); excluded from reading `student_medical_info` and `teacher_bank_details`.
+* **Teachers**: Read-only access to students and their own teacher record.
 * **Parents & Students**: Scoped read-only access strictly to records belonging to `get_my_student_ids()`.
 
 ---
@@ -90,7 +83,7 @@ To keep policies fast and maintainable, three `SECURITY DEFINER` helper function
 ## 5. Setup & Onboarding Guide (For New Developers)
 
 ### A. Flutter App Setup
-1. **Environment file**: Create `.env` in the project root with your Supabase credentials (listed in `pubspec.yaml` assets and ignored in `.gitignore`):
+1. **Environment file**: Create `.env` in the project root with your Supabase credentials (use the base project URL without `/rest/v1/`):
    ```env
    SUPABASE_URL=https://your-project.supabase.co
    SUPABASE_ANON_KEY=your-anon-key
@@ -113,6 +106,7 @@ lib/
   features/
     auth/{data,presentation,providers}
     home/{data,providers} + 6 role home screens
+    classes/{data,presentation,providers}
     admissions/{data,presentation,providers}
     students/{data,presentation,providers}
     teachers/{data,presentation,providers}
@@ -126,9 +120,14 @@ lib/
    2. `supabase/migrations/0002_student_admission.sql`
    3. `supabase/migrations/0003_teachers.sql`
 2. Deploy Edge Function: `supabase/functions/create-teacher-account/index.ts`.
-3. **Seed initial data**:
+3. **Create your first login user** (no seed/demo data required):
    - Create an Auth user in **Authentication → Users** (with Auto Confirm enabled) and copy their UID.
-   - Insert at least one row into `institutes`, `academic_years` (`is_current = TRUE`), `classes`, `sections`, `subjects`, and a `profiles` row mapping the Auth user's UID to that `institute_id` with role `'principal'` or `'super_admin'`.
+   - Insert their `profiles` row:
+     ```sql
+     INSERT INTO public.profiles (id, role, first_name, last_name)
+     VALUES ('YOUR_USER_UID_HERE'::UUID, 'principal', 'Admin', 'User');
+     ```
+   - Log in as Principal and create Classes & Sections directly from the **Classes** tab in the app.
 
 ---
 
@@ -139,12 +138,13 @@ lib/
 2. `AuthRepository` (`StubAuthRepository` + `SupabaseAuthRepository`) and Riverpod auth providers (`authStateProvider`, `currentProfileProvider`, `loginControllerProvider`).
 3. `go_router` (`routerProvider`) with role-based redirect guards (logged out → `/login`, logged in → role home, cross-role routes blocked).
 4. Design system (`core/theme/`), shared widgets (`core/widgets/`), and `ResponsiveScaffold` (bottom `NavigationBar` < 900px, `NavigationRail` ≥ 900px).
-5. `LoginScreen` (automatically shows 6 quick-login role buttons only when `authRepositoryProvider` is in stub mode) + 6 role home screens.
-6. V1 feature UIs: Students (directory, detail/edit, multi-step admission), Teachers (directory, 7-step form, detail/edit, activate/deactivate), Attendance (section roll-call), Fees (dues & collection), Admissions.
+5. `LoginScreen` (email/password + 5 quick-login role buttons for `Principal`, `Fee Clerk`, `Teacher`, `Student`, `Parent` signing in via `<role>@school.edu` / `password123`) + 6 role home screens.
+6. V1 feature UIs: **Classes & Sections** (add class with common-name quick-fill, multi-select sections + custom section `+` button, add/delete sections inside each class), **Students** (directory, detail/edit, multi-step admission), **Teachers** (directory, 7-step form, detail/edit, activate/deactivate), **Attendance** (section roll-call), **Fees** (dues & collection), **Admissions**.
 
 ### Backend Wiring Status
 * **Live on Supabase**:
   * **Auth** (`lib/features/auth/providers/auth_providers.dart` → `SupabaseAuthRepository`)
+  * **Classes & Sections** (`lib/features/classes/providers/classes_providers.dart` → `SupabaseClassesRepository`)
   * **Students** (`lib/features/students/providers/students_providers.dart` → `SupabaseStudentsRepository`)
   * **Teachers** (`lib/features/teachers/providers/teachers_providers.dart` → `SupabaseTeachersRepository`)
 * **Still using Stub / Dummy Data**:
@@ -155,9 +155,10 @@ lib/
   * **Notices**
 
 ### Next Steps
-1. Wire **Attendance**, **Fees**, **Admissions**, **Home**, and **Notices** repositories to Supabase.
-2. Add `update_student_admission` and `update_teacher` RPCs in SQL migrations to match the edit flows in `SupabaseStudentsRepository` and `SupabaseTeachersRepository`.
-3. Build a `super_admin` **Institute Onboarding** flow to create new schools and initial principals without manual SQL.
+1. Wire **Attendance** (add `student_attendance` migration + RPCs, then wire `SupabaseAttendanceRepository`).
+2. Wire **Fees** (add fee tables + payment RPC, then wire `SupabaseFeesRepository`).
+3. Wire **Admissions**, **Home**, and **Notices** to Supabase.
+4. Add `update_student_admission` and `update_teacher` RPCs in SQL migrations to match the edit flows in `SupabaseStudentsRepository` and `SupabaseTeachersRepository`.
 
 ---
 
